@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home2/afterwo1/public_html/
+    - /bin/cp -R AFTERSPACE/* $DEPLOYPATH
+    
