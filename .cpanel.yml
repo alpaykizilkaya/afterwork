@@ -2,7 +2,8 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home2/afterwo1/public_html/
-    - /bin/cp -R *.php *.css *.js *.png *.jpg *.jpeg *.webp *.svg *.ico $DEPLOYPATH
-    - /bin/cp -R AFTERSPACE $DEPLOYPATH
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/cp -R frontend backend $DEPLOYPATH
+    - /bin/cp -R *.php $DEPLOYPATH
 
     
