@@ -274,7 +274,10 @@ if ($selectedRole === 'employer') {
               <label for="login-email">E-posta adresin</label>
               <input id="login-email" name="email" type="email" autocomplete="email" placeholder="ornek@eposta.com" value="<?= htmlspecialchars($loginEmailValue, ENT_QUOTES, 'UTF-8') ?>" required>
 
-              <label for="login-password">Şifren</label>
+              <div class="auth-password-row">
+                <label for="login-password">Şifren</label>
+                <a href="forgot-password.php" class="auth-forgot">Şifreni mi unuttun?</a>
+              </div>
               <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Şifreni gir" required>
 
               <button type="submit" class="auth-submit">E-posta ile devam et</button>

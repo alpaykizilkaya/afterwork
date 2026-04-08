@@ -35,8 +35,7 @@
           <h1 class="hero-title">Türkiye'de doğru işi bulmanın en premium yolu.</h1>
 
           <p class="hero-description">
-            AFTERWORK, Türkiye odaklı modern bir kariyer platformudur. Doğrulanmış işverenler ve sade
-            başvuru süreciyle güvenilir ve hızlı eşleşme sunar.
+          AFTERWORK, seçilmiş işveren profili ile kariyerindeki bir sonraki adımı en iyi şekilde atmanı sağlar. Daha az başvuru, daha doğru eşleşme. 
           </p>
 
           <a class="hero-cta" href="auth.php#giris">Başla</a>

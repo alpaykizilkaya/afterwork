@@ -312,6 +312,28 @@ body {
   margin-left: 0.75rem;
 }
 
+.auth-password-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.auth-forgot {
+  font-size: 0.8rem;
+  color: var(--muted-soft);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.auth-forgot:hover,
+.auth-forgot:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+  outline: none;
+}
+
 .auth-form {
   display: grid;
   gap: 0.65rem;
@@ -506,6 +528,45 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.auth-shell--centered {
+  grid-template-columns: minmax(0, 460px);
+  justify-content: center;
+}
+
+.auth-centered-heading {
+  margin: 0.55rem 0 0;
+  font-size: clamp(1.75rem, 3.2vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.auth-centered-lead {
+  margin: 0.7rem 0 0;
+  font-size: 0.97rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.auth-back-link {
+  margin: 1.1rem 0 0;
+  text-align: center;
+  font-size: 0.86rem;
+}
+
+.auth-back-link a {
+  color: var(--muted-soft);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.auth-back-link a:hover,
+.auth-back-link a:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+  outline: none;
 }
 
 @media (max-width: 980px) {
