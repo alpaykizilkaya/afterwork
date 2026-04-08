@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 session_start();
 
+// DEV BYPASS — localhost only, remove before pushing to production
+if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
+    $_SESSION['account'] = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'seeker'];
+    $_SESSION['seeker']  = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'full_name' => 'Dev Kullanıcı', 'role' => 'seeker'];
+}
+
 if (
     !isset($_SESSION['account'])
     || !is_array($_SESSION['account'])
