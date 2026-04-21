@@ -22,6 +22,10 @@ if (isset($_GET['status']) && $_GET['status'] === 'registered') {
     $activeTab = 'giris';
 }
 
+if (isset($_GET['google_error'])) {
+    $errors[] = 'Google ile giriş başarısız: ' . (string) $_GET['google_error'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $mode = $_POST['mode'] ?? '';
 
@@ -255,7 +259,7 @@ if ($selectedRole === 'employer') {
           <p>Hesabına giriş yap, fırsatları keşfet ve süreci tek yerden yönet.</p>
 
           <div class="auth-login-stack">
-            <button type="button" class="auth-google" aria-disabled="true">
+            <a class="auth-google" href="auth/google/start.php">
               <span class="auth-google-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="img" focusable="false">
                   <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.24 1.26-.96 2.33-2.04 3.05l3.3 2.56c1.92-1.77 3.03-4.38 3.03-7.49 0-.72-.06-1.41-.18-2.08H12z"/>
@@ -265,7 +269,7 @@ if ($selectedRole === 'employer') {
                 </svg>
               </span>
               <span>Google ile devam et</span>
-            </button>
+            </a>
             <p class="auth-divider"><span>veya</span></p>
 
             <form id="login-form" class="auth-form" action="auth.php#giris" method="post">

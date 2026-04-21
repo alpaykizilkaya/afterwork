@@ -2,9 +2,19 @@
 
 declare(strict_types=1);
 
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'afterwo1_afterworkdb');
-define('DB_USER', 'afterwo1_afterworkuser');
-define('DB_PASS', 'W^FutFO+=4Az$.bU');
-define('DB_PORT', '3306');
-define('DB_CHARSET', 'utf8mb4');
+$localConfig = __DIR__ . '/config.local.php';
+
+if (is_file($localConfig)) {
+    require $localConfig;
+    return;
+}
+
+define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
+define('DB_NAME', getenv('DB_NAME') ?: '');
+define('DB_USER', getenv('DB_USER') ?: '');
+define('DB_PASS', getenv('DB_PASS') ?: '');
+define('DB_PORT', getenv('DB_PORT') ?: '3306');
+define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
+
+define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');

@@ -3,7 +3,5 @@ deployment:
   tasks:
     - export DEPLOYPATH=/home2/afterwo1/public_html/
     - /bin/mkdir -p $DEPLOYPATH
-    - /bin/cp -R frontend backend $DEPLOYPATH
+    - /bin/cp -R frontend backend auth $DEPLOYPATH
     - /bin/cp -R *.php $DEPLOYPATH
-
-    
