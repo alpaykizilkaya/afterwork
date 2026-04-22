@@ -13,7 +13,7 @@
 
   <main id="main" class="main-content" aria-hidden="true">
     <header id="ana-sayfa" class="topbar">
-      <a class="logo-link" href="#hero" aria-label="Hero alana git">
+      <a class="logo-link" href="<?= isset($_SESSION['account']['role']) ? htmlspecialchars(afterwork_home_url(), ENT_QUOTES, 'UTF-8') : '#hero' ?>" aria-label="<?= isset($_SESSION['account']['role']) ? 'Paneline dön' : 'Hero alana git' ?>">
         <img class="logo" src="frontend/assets/images/afterwork-logo.png" alt="Afterwork">
       </a>
 

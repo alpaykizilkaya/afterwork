@@ -5,6 +5,7 @@ declare(strict_types=1);
 session_start();
 
 require_once __DIR__ . '/../../../backend/config/db.php';
+require_once __DIR__ . '/../../../backend/auth/session-helper.php';
 
 $errors = [];
 $success = null;
@@ -224,7 +225,7 @@ if ($selectedRole === 'employer') {
 </head>
 <body>
   <main class="auth-page">
-    <a class="auth-brand" href="index.php#ana-sayfa" aria-label="Ana sayfaya dön">
+    <a class="auth-brand" href="<?= htmlspecialchars(afterwork_home_url(), ENT_QUOTES, 'UTF-8') ?>" aria-label="Ana sayfaya dön">
       <img src="frontend/assets/images/afterwork-logo.png" alt="Afterwork">
     </a>
 

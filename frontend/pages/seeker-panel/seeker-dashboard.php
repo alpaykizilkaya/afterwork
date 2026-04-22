@@ -19,6 +19,8 @@ if (
     exit;
 }
 
+require_once __DIR__ . '/../../../backend/auth/session-helper.php';
+
 $seeker = isset($_SESSION['seeker']) && is_array($_SESSION['seeker']) ? $_SESSION['seeker'] : [];
 $fullName = trim((string) ($seeker['full_name'] ?? ''));
 if ($fullName === '') {
@@ -36,7 +38,7 @@ if ($fullName === '') {
 <body>
   <main class="seeker-page">
     <header class="seeker-topbar">
-      <a class="seeker-brand" href="index.php#ana-sayfa" aria-label="Ana sayfaya don">
+      <a class="seeker-brand" href="<?= htmlspecialchars(afterwork_home_url(), ENT_QUOTES, 'UTF-8') ?>" aria-label="Ana sayfaya don">
         <img src="frontend/assets/images/afterwork-logo.png" alt="Afterwork">
       </a>
       <a class="seeker-exit" href="auth.php#giris">Cikis</a>

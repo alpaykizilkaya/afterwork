@@ -5,6 +5,7 @@ declare(strict_types=1);
 session_start();
 
 require_once __DIR__ . '/../../backend/config/db.php';
+require_once __DIR__ . '/../../backend/auth/session-helper.php';
 
 if (empty($_SESSION['google_pending']) || !is_array($_SESSION['google_pending'])) {
     header('Location: /auth.php');
@@ -123,7 +124,7 @@ $namePlaceholder = $role === 'employer' ? 'Şirket adını gir' : 'Ad ve soyadı
 </head>
 <body>
   <main class="auth-page">
-    <a class="auth-brand" href="/index.php#ana-sayfa" aria-label="Ana sayfaya dön">
+    <a class="auth-brand" href="<?= htmlspecialchars(afterwork_home_url(), ENT_QUOTES, 'UTF-8') ?>" aria-label="Ana sayfaya dön">
       <img src="/frontend/assets/images/afterwork-logo.png" alt="Afterwork">
     </a>
 

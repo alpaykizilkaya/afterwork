@@ -20,6 +20,7 @@ if (
 }
 
 require_once __DIR__ . '/../../../backend/config/db.php';
+require_once __DIR__ . '/../../../backend/auth/session-helper.php';
 
 $employer   = is_array($_SESSION['employer'] ?? null) ? $_SESSION['employer'] : [];
 $employerId = (int) ($employer['id'] ?? 0);
@@ -194,7 +195,7 @@ $panelHidden = static fn (string $key): string =>
 
     <!-- TOPBAR -->
     <header class="ep-topbar">
-      <a class="ep-brand" href="index.php#ana-sayfa" aria-label="Ana sayfaya dön">
+      <a class="ep-brand" href="<?= htmlspecialchars(afterwork_home_url(), ENT_QUOTES, 'UTF-8') ?>" aria-label="Ana sayfaya dön">
         <img src="frontend/assets/images/afterwork-logo.png" alt="Afterwork">
       </a>
       <nav class="ep-nav" aria-label="Panel navigasyonu">
