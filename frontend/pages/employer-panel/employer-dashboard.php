@@ -189,6 +189,7 @@ $panelHidden = static fn (string $key): string =>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | İş Veren Paneli</title>
   <link rel="stylesheet" href="frontend/assets/css/employer-panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer-panel.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/logout-modal.css') ?>">
 </head>
 <body>
   <div class="ep-page">
@@ -202,7 +203,7 @@ $panelHidden = static fn (string $key): string =>
         <a href="#">İlanlarım</a>
         <a href="#">Başvurular</a>
       </nav>
-      <a class="ep-exit" href="auth.php#giris">Çıkış</a>
+      <button type="button" class="ep-exit" data-logout-trigger>Çıkış Yap</button>
     </header>
 
     <!-- HERO -->
@@ -505,6 +506,23 @@ $panelHidden = static fn (string $key): string =>
     </div>
   </div>
 
+  <div id="logout-modal" class="logout-modal" role="dialog" aria-modal="true" aria-labelledby="logout-modal-title">
+    <div class="logout-modal__backdrop" aria-hidden="true"></div>
+    <div class="logout-modal__card" role="document">
+      <p class="logout-modal__kicker">Çıkış Yap</p>
+      <h2 id="logout-modal-title" class="logout-modal__title">Emin misin?</h2>
+      <p class="logout-modal__lead">Hesabından çıkış yapmak üzeresin. Devam edersen tekrar giriş yapman gerekecek.</p>
+      <div class="logout-modal__actions">
+        <form class="logout-modal__form" action="/logout.php" method="post">
+          <input type="hidden" name="confirm" value="yes">
+          <button type="submit" class="logout-modal__btn logout-modal__btn--danger">Evet, çıkış yap</button>
+        </form>
+        <button type="button" class="logout-modal__btn logout-modal__btn--ghost" data-logout-close>Vazgeç</button>
+      </div>
+    </div>
+  </div>
+
   <script src="frontend/assets/js/employer-panel.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer-panel.js') ?>" defer></script>
+  <script src="frontend/assets/js/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/logout-modal.js') ?>" defer></script>
 </body>
 </html>

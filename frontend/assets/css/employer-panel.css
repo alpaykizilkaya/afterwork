@@ -84,6 +84,8 @@ body {
 .ep-nav a:hover { color: #fefcff; }
 
 .ep-exit {
+  appearance: none;
+  background: transparent;
   color: rgba(254, 252, 255, 0.72);
   text-decoration: none;
   border: 1px solid rgba(245, 243, 239, 0.18);
@@ -94,6 +96,8 @@ body {
   align-items: center;
   font-size: 0.85rem;
   font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
   flex-shrink: 0;
   transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
