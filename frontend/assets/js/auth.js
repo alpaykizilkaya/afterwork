@@ -39,6 +39,7 @@
   const usernameLabel = document.getElementById("register-username-label");
   const registerBack = document.getElementById("register-back");
   const roleCards = document.querySelectorAll(".role-card-option");
+  const registerGoogle = document.getElementById("register-google");
 
   const setRegisterStep = (step) => {
     if (!registerFlow || !chooseStep || !detailsStep) {
@@ -77,6 +78,13 @@
     roleCards.forEach((card) => {
       card.classList.toggle("is-selected", card.dataset.role === role);
     });
+
+    if (registerGoogle) {
+      registerGoogle.setAttribute(
+        "href",
+        "auth/google/start.php?role=" + encodeURIComponent(role)
+      );
+    }
 
     if (role === "employer" || role === "seeker") {
       setRegisterStep("details");

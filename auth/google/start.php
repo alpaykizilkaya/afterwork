@@ -11,6 +11,13 @@ if (GOOGLE_CLIENT_ID === '' || GOOGLE_CLIENT_SECRET === '') {
     exit('Google OAuth is not configured.');
 }
 
+$role = (string) ($_GET['role'] ?? '');
+if (in_array($role, ['employer', 'seeker'], true)) {
+    $_SESSION['google_preferred_role'] = $role;
+} else {
+    unset($_SESSION['google_preferred_role']);
+}
+
 $state = bin2hex(random_bytes(16));
 $_SESSION['google_oauth_state'] = $state;
 

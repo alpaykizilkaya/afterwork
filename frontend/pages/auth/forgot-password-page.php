@@ -34,15 +34,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Generate a secure random token
                 $token = bin2hex(random_bytes(32));
-                $expiresAt = date('Y-m-d H:i:s', time() + 3600); // 1 hour
 
+                // Let MySQL set expires_at so SELECT NOW() and the stored expiry use the same clock.
                 $insertStmt = $pdo->prepare(
-                    'INSERT INTO password_resets (email, token, expires_at) VALUES (:email, :token, :expires_at)'
+                    'INSERT INTO password_resets (email, token, expires_at) VALUES (:email, :token, DATE_ADD(NOW(), INTERVAL 30 MINUTE))'
                 );
                 $insertStmt->execute([
                     'email' => $emailValue,
                     'token' => $token,
-                    'expires_at' => $expiresAt,
                 ]);
 
                 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -54,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $textBody .= "Afterwork hesabın için şifre sıfırlama talebinde bulundun.\n\n";
                 $textBody .= "Şifreni sıfırlamak için aşağıdaki bağlantıya tıkla:\n";
                 $textBody .= $resetUrl . "\n\n";
-                $textBody .= "Bu bağlantı 1 saat geçerlidir.\n\n";
+                $textBody .= "Bu bağlantı 30 dakika geçerlidir.\n\n";
                 $textBody .= "Eğer bu talebi sen yapmadıysan, bu e-postayı görmezden gelebilirsin.\n\n";
                 $textBody .= "Afterwork Ekibi";
 
@@ -64,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $htmlBody .= '<p style="line-height:1.55;margin:0 0 16px;">Merhaba,</p>';
                 $htmlBody .= '<p style="line-height:1.55;margin:0 0 16px;">Afterwork hesabın için şifre sıfırlama talebinde bulundun. Şifreni sıfırlamak için aşağıdaki butona tıkla:</p>';
                 $htmlBody .= '<p style="margin:24px 0;"><a href="' . $safeResetUrl . '" style="display:inline-block;background:#11212d;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:12px;font-weight:600;">Şifreni sıfırla</a></p>';
-                $htmlBody .= '<p style="line-height:1.55;margin:0 0 16px;font-size:14px;color:#4b5b66;">Bu bağlantı 1 saat geçerlidir. Eğer bu talebi sen yapmadıysan, bu e-postayı görmezden gelebilirsin.</p>';
+                $htmlBody .= '<p style="line-height:1.55;margin:0 0 16px;font-size:14px;color:#4b5b66;">Bu bağlantı 30 dakika geçerlidir. Eğer bu talebi sen yapmadıysan, bu e-postayı görmezden gelebilirsin.</p>';
                 $htmlBody .= '<p style="line-height:1.55;margin:24px 0 0;font-size:14px;color:#4b5b66;">Afterwork Ekibi</p>';
                 $htmlBody .= '</div>';
 

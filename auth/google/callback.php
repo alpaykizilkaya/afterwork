@@ -104,10 +104,14 @@ try {
         google_login_redirect($pdo, (int) $account['id'], $account['email'], $account['role']);
     }
 
+    $preferredRole = $_SESSION['google_preferred_role'] ?? null;
+    unset($_SESSION['google_preferred_role']);
+
     $_SESSION['google_pending'] = [
         'google_id' => $googleId,
         'email' => $email,
         'name' => $name,
+        'preferred_role' => in_array($preferredRole, ['employer', 'seeker'], true) ? $preferredRole : null,
     ];
 
     header('Location: /auth/google/role-select.php');
