@@ -18,3 +18,7 @@ define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
 
 define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
 define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+
+define('RESEND_API_KEY', getenv('RESEND_API_KEY') ?: '');
+define('MAIL_FROM_ADDRESS', getenv('MAIL_FROM_ADDRESS') ?: 'noreply@afterwork.com.tr');
+define('MAIL_FROM_NAME', getenv('MAIL_FROM_NAME') ?: 'Afterwork');

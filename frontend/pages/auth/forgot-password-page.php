@@ -5,6 +5,7 @@ declare(strict_types=1);
 session_start();
 
 require_once __DIR__ . '/../../../backend/config/db.php';
+require_once __DIR__ . '/../../../backend/mail/mailer.php';
 
 $error = null;
 $success = null;
@@ -49,26 +50,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $resetUrl = $protocol . '://' . $host . '/reset-password.php?token=' . urlencode($token);
 
                 $subject = 'Afterwork — Şifre Sıfırlama';
-                $body  = "Merhaba,\n\n";
-                $body .= "Afterwork hesabın için şifre sıfırlama talebinde bulundun.\n\n";
-                $body .= "Şifreni sıfırlamak için aşağıdaki bağlantıya tıkla:\n";
-                $body .= $resetUrl . "\n\n";
-                $body .= "Bu bağlantı 1 saat geçerlidir.\n\n";
-                $body .= "Eğer bu talebi sen yapmadıysan, bu e-postayı görmezden gelebilirsin.\n\n";
-                $body .= "Afterwork Ekibi";
+                $textBody  = "Merhaba,\n\n";
+                $textBody .= "Afterwork hesabın için şifre sıfırlama talebinde bulundun.\n\n";
+                $textBody .= "Şifreni sıfırlamak için aşağıdaki bağlantıya tıkla:\n";
+                $textBody .= $resetUrl . "\n\n";
+                $textBody .= "Bu bağlantı 1 saat geçerlidir.\n\n";
+                $textBody .= "Eğer bu talebi sen yapmadıysan, bu e-postayı görmezden gelebilirsin.\n\n";
+                $textBody .= "Afterwork Ekibi";
 
-                $fromDomain = preg_replace('/^www\./', '', (string) ($_SERVER['HTTP_HOST'] ?? 'afterwork.com.tr'));
-                $fromAddress = 'noreply@' . $fromDomain;
+                $safeResetUrl = htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8');
+                $htmlBody  = '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#06141b;">';
+                $htmlBody .= '<h2 style="font-size:22px;margin:0 0 16px;">Şifre sıfırlama</h2>';
+                $htmlBody .= '<p style="line-height:1.55;margin:0 0 16px;">Merhaba,</p>';
+                $htmlBody .= '<p style="line-height:1.55;margin:0 0 16px;">Afterwork hesabın için şifre sıfırlama talebinde bulundun. Şifreni sıfırlamak için aşağıdaki butona tıkla:</p>';
+                $htmlBody .= '<p style="margin:24px 0;"><a href="' . $safeResetUrl . '" style="display:inline-block;background:#11212d;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:12px;font-weight:600;">Şifreni sıfırla</a></p>';
+                $htmlBody .= '<p style="line-height:1.55;margin:0 0 16px;font-size:14px;color:#4b5b66;">Bu bağlantı 1 saat geçerlidir. Eğer bu talebi sen yapmadıysan, bu e-postayı görmezden gelebilirsin.</p>';
+                $htmlBody .= '<p style="line-height:1.55;margin:24px 0 0;font-size:14px;color:#4b5b66;">Afterwork Ekibi</p>';
+                $htmlBody .= '</div>';
 
-                $headers = implode("\r\n", [
-                    'From: Afterwork <' . $fromAddress . '>',
-                    'Reply-To: ' . $fromAddress,
-                    'MIME-Version: 1.0',
-                    'Content-Type: text/plain; charset=UTF-8',
-                    'X-Mailer: PHP/' . PHP_VERSION,
-                ]);
-
-                mail($emailValue, $subject, $body, $headers, '-f' . $fromAddress);
+                send_mail($emailValue, $subject, $textBody, $htmlBody);
             }
         } catch (Throwable $e) {
             $error = 'Bir hata oluştu: ' . $e->getMessage();
