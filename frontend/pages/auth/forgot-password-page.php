@@ -57,13 +57,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $body .= "Eğer bu talebi sen yapmadıysan, bu e-postayı görmezden gelebilirsin.\n\n";
                 $body .= "Afterwork Ekibi";
 
+                $fromDomain = preg_replace('/^www\./', '', (string) ($_SERVER['HTTP_HOST'] ?? 'afterwork.com.tr'));
+                $fromAddress = 'noreply@' . $fromDomain;
+
                 $headers = implode("\r\n", [
-                    'From: noreply@afterwork.com',
+                    'From: Afterwork <' . $fromAddress . '>',
+                    'Reply-To: ' . $fromAddress,
+                    'MIME-Version: 1.0',
                     'Content-Type: text/plain; charset=UTF-8',
                     'X-Mailer: PHP/' . PHP_VERSION,
                 ]);
 
-                mail($emailValue, $subject, $body, $headers);
+                mail($emailValue, $subject, $body, $headers, '-f' . $fromAddress);
             }
         } catch (Throwable $e) {
             $error = 'Bir hata oluştu: ' . $e->getMessage();

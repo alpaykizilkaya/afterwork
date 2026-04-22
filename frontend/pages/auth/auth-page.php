@@ -294,6 +294,21 @@ if ($selectedRole === 'employer') {
           <h2>AFTERWORK'a katıl</h2>
           <p>Rolünü seç, hesabını oluştur ve sana uygun deneyimle devam et.</p>
 
+          <div class="auth-login-stack">
+            <a class="auth-google" href="auth/google/start.php">
+              <span class="auth-google-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img" focusable="false">
+                  <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.24 1.26-.96 2.33-2.04 3.05l3.3 2.56c1.92-1.77 3.03-4.38 3.03-7.49 0-.72-.06-1.41-.18-2.08H12z"/>
+                  <path fill="#34A853" d="M12 22c2.7 0 4.96-.89 6.61-2.42l-3.3-2.56c-.92.62-2.09.99-3.31.99-2.55 0-4.71-1.72-5.48-4.03l-3.41 2.63C4.76 19.93 8.08 22 12 22z"/>
+                  <path fill="#4A90E2" d="M6.52 13.98A5.98 5.98 0 0 1 6.2 12c0-.69.12-1.36.32-1.98L3.1 7.39A9.95 9.95 0 0 0 2 12c0 1.61.39 3.13 1.1 4.45l3.42-2.47z"/>
+                  <path fill="#FBBC05" d="M12 5.98c1.47 0 2.79.51 3.83 1.5l2.87-2.87C16.95 2.98 14.69 2 12 2 8.08 2 4.76 4.07 3.1 7.39l3.42 2.63C7.29 7.7 9.45 5.98 12 5.98z"/>
+                </svg>
+              </span>
+              <span>Google ile kayıt ol</span>
+            </a>
+            <p class="auth-divider"><span>veya</span></p>
+          </div>
+
           <div id="register-flow" class="register-flow" data-step="<?= $isRegisterDetails ? 'details' : 'choose' ?>">
           <div id="register-step-choose" class="register-step register-step-choose"<?= $isRegisterDetails ? ' hidden' : '' ?>>
             <h3>Önce rolünü seç</h3>

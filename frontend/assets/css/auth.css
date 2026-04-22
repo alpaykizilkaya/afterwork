@@ -257,7 +257,8 @@ body {
   gap: 0.65rem;
   font-size: 1rem;
   font-weight: 600;
-  cursor: default;
+  cursor: pointer;
+  text-decoration: none;
   transition: transform 0.22s ease, border-color 0.22s ease, background-color 0.22s ease, box-shadow 0.22s ease;
 }
 
