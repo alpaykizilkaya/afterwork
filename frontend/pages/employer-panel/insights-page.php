@@ -49,22 +49,43 @@ try {
 // how the empty Mercek page looks. Analytics queries still run against the real
 // DB, so every number/chart stays at 0 — no mock data, just a skeleton listing.
 $isLocalhost = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000', 'afterwork.test'], true);
+
+// `?dolu=1` on localhost → design preview with rich mock data in every chart.
+// Strictly gated: prod never triggers this, so no fake numbers ever reach real users.
+$isDemo = $isLocalhost && isset($_GET['dolu']);
+
 if ($listing === null && $isLocalhost) {
-    $listing = [
-        'id'              => $listingId,
-        'title'           => 'Örnek İlan · Önizleme',
-        'employment_type' => 'Tam Zamanlı',
-        'work_model'      => 'Hibrit',
-        'location'        => 'İstanbul',
-        'salary_min'      => null,
-        'salary_max'      => null,
-        'description'     => '',
-        'requirements'    => '',
-        'benefits'        => '',
-        'experience_level'=> '',
-        'skills'          => '',
-        'is_active'       => 1,
-    ];
+    $listing = $isDemo
+        ? [
+            'id'              => $listingId,
+            'title'           => 'Frontend Geliştirici · React + TypeScript',
+            'employment_type' => 'Tam Zamanlı',
+            'work_model'      => 'Hibrit',
+            'location'        => 'İstanbul',
+            'salary_min'      => 45000,
+            'salary_max'      => 72000,
+            'description'     => 'Kullanıcı arayüzlerini tasarlayıp geliştireceğin, modern React + TypeScript stack üzerinde çalışacağın premium bir ekip.',
+            'requirements'    => 'React, TypeScript, modern CSS. 2+ yıl deneyim.',
+            'benefits'        => 'Sağlık sigortası, yemek kartı, ulaşım.',
+            'experience_level'=> 'Mid-level (2–5 yıl)',
+            'skills'          => 'React, TypeScript, CSS, Figma',
+            'is_active'       => 1,
+        ]
+        : [
+            'id'              => $listingId,
+            'title'           => 'Örnek İlan · Önizleme',
+            'employment_type' => 'Tam Zamanlı',
+            'work_model'      => 'Hibrit',
+            'location'        => 'İstanbul',
+            'salary_min'      => null,
+            'salary_max'      => null,
+            'description'     => '',
+            'requirements'    => '',
+            'benefits'        => '',
+            'experience_level'=> '',
+            'skills'          => '',
+            'is_active'       => 1,
+        ];
 }
 
 // ── Real analytics (tables may be empty — page honestly shows 0 / empty states) ─
@@ -179,6 +200,48 @@ $kpis = [
     ['label' => 'Yanıt Oranı',         'value' => '—'],
 ];
 
+// ── Demo mode: override real zeros with rich mock data (localhost only) ──
+if ($isDemo) {
+    $totalViews        = 1284;
+    $uniqueVisitors    = 842;
+    $totalApplications = 37;
+    $totalSaves        = 96;
+
+    // Daily series — sinusoidal-ish growth pattern over 30 days
+    for ($i = 0; $i < $days; $i++) {
+        $base = 25 + (int) round(30 * sin($i / 4) + $i * 1.4);
+        $dailyViews[$i] = max(8, $base + random_int(-10, 14));
+        $dailyApps[$i]  = max(0, (int) round($base / 8) + random_int(-1, 3));
+        $dailySaves[$i] = max(0, (int) round($base / 3) + random_int(-2, 5));
+    }
+
+    // Hourly heatmap — workday peak, weekends quieter
+    for ($d = 0; $d < 7; $d++) {
+        for ($h = 0; $h < 24; $h++) {
+            $workday = $d < 5;
+            $workHour = $h >= 9 && $h <= 19;
+            if ($workday && $workHour) $base = 18 + (int) round(10 * sin(($h - 10) / 3));
+            elseif (!$workday && $h >= 11 && $h <= 22) $base = 9 + (int) round(4 * sin(($h - 14) / 4));
+            else $base = 2;
+            $hourly[$d][$h] = max(0, $base + random_int(-3, 4));
+        }
+    }
+
+    $trafficBreakdown = ['Arama' => 42, 'Ana sayfa' => 26, 'Profil' => 14, 'Direkt' => 12, 'Paylaşım' => 6];
+    $deviceBreakdown  = ['Mobil' => 58, 'Masaüstü' => 38, 'Tablet' => 4];
+
+    $fmtNum = static fn (int $n): string => number_format($n, 0, ',', '.');
+    $kpis = [
+        ['label' => 'Toplam Görüntülenme', 'value' => $fmtNum($totalViews)],
+        ['label' => 'Benzersiz Ziyaretçi', 'value' => $fmtNum($uniqueVisitors)],
+        ['label' => 'Başvuru Sayısı',      'value' => $fmtNum($totalApplications)],
+        ['label' => 'Kaydedenler',         'value' => $fmtNum($totalSaves)],
+        ['label' => 'Ort. Sayfada Kalma',  'value' => '1:42'],
+        ['label' => 'Tamamlanma Oranı',    'value' => '68%'],
+        ['label' => 'Yanıt Oranı',         'value' => '54%'],
+    ];
+}
+
 $hasViews   = $totalViews > 0;
 $hasApps    = $totalApplications > 0;
 $hasSaves   = $totalSaves > 0;
@@ -256,6 +319,7 @@ if ($lMin !== null && $lMax !== null) {
         <p class="in-hero-kicker">Mercek · İlan #<?= (int) $listingId ?></p>
         <h1><?= htmlspecialchars($lTitle, ENT_QUOTES, 'UTF-8') ?></h1>
         <div class="in-hero-chips">
+          <?php if ($isDemo): ?><span class="in-chip in-chip--demo">DEMO · Örnek veri</span><?php endif; ?>
           <?php if ($lType !== ''): ?><span class="in-chip"><?= htmlspecialchars($lType, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
           <?php if ($lModel !== ''): ?><span class="in-chip"><?= htmlspecialchars($lModel, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
           <?php if ($lLocation !== ''): ?><span class="in-chip in-chip--ghost"><?= htmlspecialchars($lLocation, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
@@ -364,23 +428,48 @@ if ($lMin !== null && $lMax !== null) {
         <?php endif; ?>
       </section>
 
-      <!-- D — Aday demografisi (requires seeker profile fields + application link) -->
+      <!-- D — Aday demografisi -->
       <section class="in-section">
         <h2 class="in-section-title">Aday Demografisi</h2>
-        <div class="in-card">
-          <div class="in-empty">
-            Cinsiyet · yaş · eğitim · deneyim · üniversite kırılımları, aday profillerindeki alanlar doldurulup başvuru geldikçe burada görünecek.
+        <?php if ($isDemo): ?>
+          <div class="in-grid in-grid--3">
+            <div class="in-card">
+              <p class="in-card-kicker">Cinsiyet</p>
+              <div class="in-chart in-chart--donut"><canvas id="chart-gender"></canvas></div>
+            </div>
+            <div class="in-card">
+              <p class="in-card-kicker">Yaş Aralığı</p>
+              <div class="in-chart"><canvas id="chart-age"></canvas></div>
+            </div>
+            <div class="in-card">
+              <p class="in-card-kicker">Eğitim Seviyesi</p>
+              <div class="in-chart in-chart--donut"><canvas id="chart-education"></canvas></div>
+            </div>
+            <div class="in-card">
+              <p class="in-card-kicker">Deneyim Seviyesi</p>
+              <div class="in-chart in-chart--donut"><canvas id="chart-experience"></canvas></div>
+            </div>
+            <div class="in-card in-card--span2">
+              <p class="in-card-kicker">En çok başvuran 10 üniversite</p>
+              <div class="in-chart in-chart--tall"><canvas id="chart-universities"></canvas></div>
+            </div>
           </div>
-        </div>
+        <?php else: ?>
+          <div class="in-card">
+            <div class="in-empty">
+              Cinsiyet · yaş · eğitim · deneyim · üniversite kırılımları, aday profillerindeki alanlar doldurulup başvuru geldikçe burada görünecek.
+            </div>
+          </div>
+        <?php endif; ?>
       </section>
 
-      <!-- E — Coğrafi (requires IP→country+city lookup on view events) -->
+      <!-- E — Coğrafi -->
       <section class="in-section">
         <h2 class="in-section-title">Coğrafi Dağılım</h2>
         <div class="in-card in-card--map">
           <div class="in-map-head">
             <p class="in-card-kicker">Dünya başvuru ısı haritası</p>
-            <?php if ($hasViews): ?>
+            <?php if ($hasViews || $isDemo): ?>
               <button type="button" id="map-reset" class="in-map-reset" hidden>
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                   <path d="M3 6l3-3M3 6l3 3M3 6h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -389,7 +478,7 @@ if ($lMin !== null && $lMax !== null) {
               </button>
             <?php endif; ?>
           </div>
-          <?php if ($hasViews): ?>
+          <?php if ($hasViews || $isDemo): ?>
             <div id="tr-map" class="in-map" aria-label="Dünya başvuru haritası">
               <div class="in-map-loader" id="map-loader" hidden>Şehirler yükleniyor…</div>
             </div>
@@ -405,6 +494,25 @@ if ($lMin !== null && $lMax !== null) {
             <div class="in-empty">Ziyaretçilerin nereden geldiği, ilana görüntülenme kaydı düştükçe dünya haritasına işlenir.</div>
           <?php endif; ?>
         </div>
+        <?php if ($isDemo): ?>
+          <div class="in-grid in-grid--2" style="margin-top:1rem;">
+            <div class="in-card">
+              <p class="in-card-kicker">İlk 10 şehir</p>
+              <div class="in-chart in-chart--tall"><canvas id="chart-cities"></canvas></div>
+            </div>
+            <div class="in-card">
+              <p class="in-card-kicker">Şehir dağılımı</p>
+              <ul class="in-stat-list">
+                <li><span>İstanbul</span><strong>48%</strong></li>
+                <li><span>Ankara</span><strong>18%</strong></li>
+                <li><span>İzmir</span><strong>11%</strong></li>
+                <li><span>Bursa</span><strong>6%</strong></li>
+                <li><span>Diğer</span><strong>17%</strong></li>
+              </ul>
+              <p class="in-card-note">Şehir dışı + yurt dışı: <strong>12%</strong></p>
+            </div>
+          </div>
+        <?php endif; ?>
       </section>
 
       <!-- F — Trafik -->
@@ -429,32 +537,89 @@ if ($lMin !== null && $lMax !== null) {
           </div>
           <div class="in-card">
             <p class="in-card-kicker">En çok aranan kelimeler</p>
-            <div class="in-empty">Arama sorgu kaydı eklendiğinde kelime bulutu burada çizilecek.</div>
+            <?php if ($isDemo): ?>
+              <div id="wordcloud" class="in-wordcloud-wrap" aria-label="Anahtar kelime bulutu"></div>
+            <?php else: ?>
+              <div class="in-empty">Arama sorgu kaydı eklendiğinde kelime bulutu burada çizilecek.</div>
+            <?php endif; ?>
           </div>
         </div>
       </section>
 
-      <!-- G — Rekabet · Piyasa (requires cross-employer aggregates) -->
+      <!-- G — Rekabet · Piyasa -->
       <section class="in-section">
         <div class="in-section-head">
           <h2 class="in-section-title">Rekabet · Piyasa</h2>
           <span class="in-premium-chip">Premium</span>
         </div>
-        <div class="in-card">
-          <div class="in-empty">
-            Aynı pozisyon için piyasa ortalamaları ve rekabet skoru — sektörde yeterli ilan &amp; başvuru biriktiğinde burada yayına alınacak.
+        <?php if ($isDemo): ?>
+          <div class="in-grid in-grid--2">
+            <div class="in-card">
+              <p class="in-card-kicker">Rekabet gücü skoru</p>
+              <div class="in-score">
+                <div class="in-score-value">72<span>/100</span></div>
+                <div class="in-score-bar"><span style="width: 72%;"></span></div>
+                <p class="in-score-note">İçerik kalitesi ve maaş bandı üzerinde çalışırsan 80+ mümkün.</p>
+              </div>
+            </div>
+            <div class="in-card">
+              <p class="in-card-kicker">Pozisyon için piyasa ortalaması</p>
+              <ul class="in-stat-list">
+                <li><span>Ort. görüntülenme</span><strong>874</strong></li>
+                <li><span>Ort. başvuru</span><strong>22</strong></li>
+                <li><span>Ort. yayın süresi</span><strong>18 gün</strong></li>
+                <li><span>Maaş ortalaması</span><strong>45.000 – 72.000 ₺</strong></li>
+              </ul>
+            </div>
+            <div class="in-card in-card--span2">
+              <p class="in-card-kicker">Pozisyon talep trendi (son 3 ay)</p>
+              <div class="in-chart"><canvas id="chart-trend"></canvas></div>
+            </div>
           </div>
-        </div>
+        <?php else: ?>
+          <div class="in-card">
+            <div class="in-empty">
+              Aynı pozisyon için piyasa ortalamaları ve rekabet skoru — sektörde yeterli ilan &amp; başvuru biriktiğinde burada yayına alınacak.
+            </div>
+          </div>
+        <?php endif; ?>
       </section>
 
-      <!-- H — Önerilen adaylar (requires match engine + seeker profiles) -->
+      <!-- H — Önerilen adaylar -->
       <section class="in-section">
         <h2 class="in-section-title">Önerilen Adaylar</h2>
-        <div class="in-card">
-          <div class="in-empty">
-            Aranan becerilere göre eşleşen adaylar — aday havuzu ve eşleşme motoru aktifleştiğinde önerilen profiller burada sıralanır.
+        <?php if ($isDemo): ?>
+          <div class="in-candidates">
+            <?php
+            $candidates = [
+              ['name' => 'A. Yılmaz',  'match' => 94, 'why' => 'İstenen 3 beceriden 3\'ü eşleşiyor · 5 yıl deneyim'],
+              ['name' => 'D. Kara',    'match' => 88, 'why' => 'React + TypeScript · uzaktan çalışma tercihi'],
+              ['name' => 'E. Toprak',  'match' => 83, 'why' => 'İstanbul · benzer pozisyonda 2 yıl'],
+              ['name' => 'M. Aslan',   'match' => 79, 'why' => 'Junior · hızlı öğrenme göstergeleri yüksek'],
+              ['name' => 'S. Demir',   'match' => 76, 'why' => 'İstenen becerilerden 2\'si var · İzmir'],
+            ];
+            foreach ($candidates as $c):
+            ?>
+            <article class="in-cand-card">
+              <div class="in-cand-avatar" aria-hidden="true"><?= htmlspecialchars(mb_substr($c['name'], 0, 1, 'UTF-8'), ENT_QUOTES, 'UTF-8') ?></div>
+              <div class="in-cand-body">
+                <div class="in-cand-name-row">
+                  <strong class="in-cand-name"><?= htmlspecialchars($c['name'], ENT_QUOTES, 'UTF-8') ?></strong>
+                  <span class="in-cand-match"><?= (int) $c['match'] ?>%</span>
+                </div>
+                <p class="in-cand-why"><?= htmlspecialchars($c['why'], ENT_QUOTES, 'UTF-8') ?></p>
+              </div>
+              <a class="in-cand-cta" href="#" aria-disabled="true" title="Yakında">Profili Aç</a>
+            </article>
+            <?php endforeach; ?>
           </div>
-        </div>
+        <?php else: ?>
+          <div class="in-card">
+            <div class="in-empty">
+              Aranan becerilere göre eşleşen adaylar — aday havuzu ve eşleşme motoru aktifleştiğinde önerilen profiller burada sıralanır.
+            </div>
+          </div>
+        <?php endif; ?>
       </section>
 
       <!-- I — Kalite skoru (computed from the listing content itself) -->
@@ -491,14 +656,37 @@ if ($lMin !== null && $lMax !== null) {
         </div>
       </section>
 
-      <!-- J — Davranış (requires event-level tracking: scroll depth, dwell time) -->
+      <!-- J — Davranış -->
       <section class="in-section">
         <h2 class="in-section-title">Etkileşim · Davranış</h2>
-        <div class="in-card">
-          <div class="in-empty">
-            Sayfada kalma süresi, geri dönüş oranı, en çok okunan bölüm — ilan sayfasına event takibi eklendikten sonra buraya düşecek.
+        <?php if ($isDemo): ?>
+          <div class="in-grid in-grid--3">
+            <div class="in-card">
+              <p class="in-card-kicker">Ortalama sayfada kalma</p>
+              <p class="in-big-stat">1:42 <small>dk</small></p>
+              <p class="in-card-note">Piyasa ortalaması: 1:18</p>
+            </div>
+            <div class="in-card">
+              <p class="in-card-kicker">Geri dönüş oranı</p>
+              <p class="in-big-stat">23%</p>
+              <p class="in-card-note">Ziyaretçilerin yaklaşık 1/4'ü ilanı tekrar açıyor.</p>
+            </div>
+            <div class="in-card">
+              <p class="in-card-kicker">En çok okunan bölüm</p>
+              <ul class="in-stat-list in-stat-list--tight">
+                <li><span>Açıklama</span><strong>64%</strong></li>
+                <li><span>Aranan özellikler</span><strong>22%</strong></li>
+                <li><span>Maaş &amp; yan haklar</span><strong>14%</strong></li>
+              </ul>
+            </div>
           </div>
-        </div>
+        <?php else: ?>
+          <div class="in-card">
+            <div class="in-empty">
+              Sayfada kalma süresi, geri dönüş oranı, en çok okunan bölüm — ilan sayfasına event takibi eklendikten sonra buraya düşecek.
+            </div>
+          </div>
+        <?php endif; ?>
       </section>
 
     </section>
