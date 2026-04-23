@@ -6,7 +6,7 @@ session_start();
 
 // DEV BYPASS — localhost only, remove before pushing to production
 if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
-    $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer'];
+    $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
     $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
 }
 
@@ -25,6 +25,19 @@ require_once __DIR__ . '/../../../backend/auth/session-helper.php';
 $employer   = is_array($_SESSION['employer'] ?? null) ? $_SESSION['employer'] : [];
 $employerId = (int) ($employer['id'] ?? 0);
 $companyName = trim((string) ($employer['company_name'] ?? '')) ?: 'Şirketiniz';
+$isVerified = (int) ($_SESSION['account']['is_verified'] ?? 0) === 1;
+$verifyFlash = $_SESSION['flash_verify'] ?? null;
+unset($_SESSION['flash_verify']);
+
+// ── View mode ──────────────────────────────────────────
+$isNewMode = isset($_GET['yeni']);
+$isProfileMode = isset($_GET['profil']);
+$selectedListingId = isset($_GET['ilan']) ? (int) $_GET['ilan'] : 0;
+$isDetailMode = $selectedListingId > 0;
+$showDashboard = $isNewMode || $isProfileMode || $isDetailMode || $_SERVER['REQUEST_METHOD'] === 'POST';
+$showGrid = !$showDashboard;
+
+$listings = [];
 
 // ── Helpers ────────────────────────────────────────────
 $p = static fn (string $key): string => trim((string) ($_POST[$key] ?? ''));
@@ -50,6 +63,18 @@ if ($employerId > 0) {
         $cnt = $pdo->prepare('SELECT COUNT(*) FROM job_listings WHERE employer_id = :id AND is_active = 1');
         $cnt->execute(['id' => $employerId]);
         $activeListings = (int) $cnt->fetchColumn();
+
+        if ($showGrid) {
+            $lst = $pdo->prepare(
+                'SELECT id, title, employment_type, work_model, location,
+                        salary_min, salary_max, is_active, created_at
+                 FROM job_listings
+                 WHERE employer_id = :id
+                 ORDER BY COALESCE(created_at, id) DESC'
+            );
+            $lst->execute(['id' => $employerId]);
+            $listings = $lst->fetchAll();
+        }
     } catch (Throwable) {
         // silent — forms will render empty
     }
@@ -115,6 +140,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'company_profile') {
 
 // ── POST: create job listing ───────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'create_listing') {
+    if (!$isVerified) {
+        $listingErrors[] = 'İlan yayınlamadan önce e-posta adresini doğrulaman gerekiyor.';
+    }
+
     $jTitle    = $p('title');
     $jType     = $p('employment_type');
     $jModel    = $p('work_model');
@@ -190,22 +219,40 @@ $panelHidden = static fn (string $key): string =>
   <title>AFTERWORK | İş Veren Paneli</title>
   <link rel="stylesheet" href="frontend/assets/css/employer-panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer-panel.css') ?>">
   <link rel="stylesheet" href="frontend/assets/css/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/logout-modal.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/verify-banner.css') ?>">
 </head>
 <body>
   <div class="ep-page">
 
     <!-- TOPBAR -->
-    <header class="ep-topbar">
-      <a class="ep-brand" href="<?= htmlspecialchars(afterwork_home_url(), ENT_QUOTES, 'UTF-8') ?>" aria-label="Ana sayfaya dön">
-        <img src="frontend/assets/images/afterwork-logo.png" alt="Afterwork">
-      </a>
-      <nav class="ep-nav" aria-label="Panel navigasyonu">
-        <a href="#">İlanlarım</a>
-        <a href="#">Başvurular</a>
-      </nav>
-      <button type="button" class="ep-exit" data-logout-trigger>Çıkış Yap</button>
-    </header>
+    <?php
+    $activeTab = 'account';
+    include __DIR__ . '/../../partials/employer-topbar.php';
+    ?>
 
+    <?php if (!$isVerified || $verifyFlash !== null): ?>
+    <div class="verify-banner" role="region" aria-label="E-posta doğrulama">
+      <?php if (!$isVerified): ?>
+        <span class="verify-banner__icon" aria-hidden="true">!</span>
+        <p class="verify-banner__text">
+          <strong>E-posta adresini doğrula.</strong>
+          İlan yayınlayabilmek için <?= htmlspecialchars((string) ($_SESSION['account']['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?> adresine gönderdiğimiz bağlantıya tıklaman gerekiyor.
+        </p>
+        <div class="verify-banner__actions">
+          <form action="/resend-verification.php" method="post" style="margin:0;">
+            <button type="submit" class="verify-banner__btn verify-banner__btn--solid">Yeniden gönder</button>
+          </form>
+        </div>
+      <?php endif; ?>
+      <?php if ($verifyFlash !== null): ?>
+        <p class="verify-banner__flash verify-banner__flash--<?= htmlspecialchars((string) $verifyFlash['type'], ENT_QUOTES, 'UTF-8') ?>">
+          <?= htmlspecialchars((string) $verifyFlash['text'], ENT_QUOTES, 'UTF-8') ?>
+        </p>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($showDashboard): ?>
     <!-- HERO -->
     <section class="ep-hero" aria-label="Hoş geldin">
       <div class="ep-hero-inner">
@@ -235,7 +282,7 @@ $panelHidden = static fn (string $key): string =>
     <div class="ep-layout">
 
       <!-- LEFT — Şirket Profili -->
-      <aside class="ep-aside">
+      <aside class="ep-aside" id="sirket-profili">
         <div class="ep-aside-head">
           <h2>Şirket Profili</h2>
           <p>Adayların göreceği şirket sayfanı oluştur.</p>
@@ -333,7 +380,7 @@ $panelHidden = static fn (string $key): string =>
       </aside>
 
       <!-- RIGHT — Yeni İlan -->
-      <main class="ep-main">
+      <main class="ep-main" id="yeni-ilan">
         <div class="ep-main-head">
           <div>
             <h2>Yeni İlan Oluştur</h2>
@@ -504,6 +551,176 @@ $panelHidden = static fn (string $key): string =>
       </main>
 
     </div>
+    <?php else: ?>
+
+    <!-- DUKKAN (grid of listings) -->
+    <section class="ep-dukkan" aria-label="Dükkan">
+      <header class="ep-dukkan-head">
+        <div>
+          <p class="ep-dukkan-kicker">Dükkan</p>
+          <h1><?= htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8') ?></h1>
+          <p class="ep-dukkan-lead">Yayındaki ilanların burada. Bir karta tıklayarak detayları aç, düzenle ve performansını gör.</p>
+        </div>
+        <div class="ep-dukkan-stats">
+          <div class="ep-stat-card ep-stat-card--light">
+            <strong><?= (int) count($listings) ?></strong>
+            <span>Toplam İlan</span>
+          </div>
+          <div class="ep-stat-card ep-stat-card--light">
+            <strong><?= $activeListings ?></strong>
+            <span>Aktif</span>
+          </div>
+          <div class="ep-stat-card ep-stat-card--light">
+            <strong>0</strong>
+            <span>Başvuru</span>
+          </div>
+        </div>
+      </header>
+
+      <?php if ($listings === []): ?>
+        <div class="ep-welcome">
+          <div class="ep-welcome-lead">
+            <p class="ep-welcome-kicker">İlk adım</p>
+            <h2>Dükkanın seni bekliyor.</h2>
+            <p class="ep-welcome-copy">
+              Premium bir iş tecrübesinin ilk durağı burası. İlk ilanını oluştur, doğru adaylar seni bulmaya başlasın.
+            </p>
+            <div class="ep-welcome-cta-row">
+              <a class="ep-dukkan-new" href="/isveren-panel.php?yeni=1">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+                Yeni İlan Oluştur
+              </a>
+              <a class="ep-welcome-secondary" href="/isveren-panel.php?profil=1">Şirket profilini tamamla →</a>
+            </div>
+          </div>
+
+          <aside class="ep-welcome-steps" aria-label="Başlangıç adımları">
+            <p class="ep-welcome-steps-kicker">3 adımda başla</p>
+            <ol>
+              <li>
+                <span class="ep-welcome-step-num">1</span>
+                <div>
+                  <strong>İlanını yayınla</strong>
+                  <p>Pozisyonu, maaş bandını ve aranan özellikleri tanımla.</p>
+                </div>
+              </li>
+              <li>
+                <span class="ep-welcome-step-num">2</span>
+                <div>
+                  <strong>İlgi topla</strong>
+                  <p>Görüntülenme, kaydeden ve başvuruları tek panelde izle.</p>
+                </div>
+              </li>
+              <li>
+                <span class="ep-welcome-step-num">3</span>
+                <div>
+                  <strong>Eşleşmeyi başlat</strong>
+                  <p>Doğru adaylarla Afterwork üzerinden mesajlaş, görüşmeye geç.</p>
+                </div>
+              </li>
+            </ol>
+          </aside>
+        </div>
+
+        <section class="ep-tips" aria-label="Premium ipuçları">
+          <header class="ep-tips-head">
+            <p class="ep-tips-kicker">Premium ipuçları</p>
+            <h3>İlk ilanından önce bir göz at.</h3>
+          </header>
+          <div class="ep-tips-row">
+            <article class="ep-tip-card">
+              <span class="ep-tip-index">01</span>
+              <h4>İyi bir başlık, %40 fazla başvuru getirir.</h4>
+              <p>Belirsiz "eleman aranıyor" yerine pozisyon + deneyim seviyesi + çalışma modeli yaz.</p>
+            </article>
+            <article class="ep-tip-card">
+              <span class="ep-tip-index">02</span>
+              <h4>Maaş aralığı gösteren ilanlar 2x etkileşim alır.</h4>
+              <p>Adaylar şeffaflığa değer veriyor. Net bir bant, doğru adayları getirir.</p>
+            </article>
+            <article class="ep-tip-card">
+              <span class="ep-tip-index">03</span>
+              <h4>Kısa ve net açıklama, kaliteli başvuru demektir.</h4>
+              <p>Sorumlulukları 4-6 madde ile özetle, beklentileri ayrı bir blokta topla.</p>
+            </article>
+          </div>
+        </section>
+      <?php else: ?>
+        <div class="ep-dukkan-grid">
+          <?php foreach ($listings as $lst):
+            $lId = (int) $lst['id'];
+            $lTitle = (string) ($lst['title'] ?? '');
+            $lType = trim((string) ($lst['employment_type'] ?? ''));
+            $lModel = trim((string) ($lst['work_model'] ?? ''));
+            $lLocation = trim((string) ($lst['location'] ?? ''));
+            $lMin = $lst['salary_min'] !== null ? (int) $lst['salary_min'] : null;
+            $lMax = $lst['salary_max'] !== null ? (int) $lst['salary_max'] : null;
+            $lActive = (int) ($lst['is_active'] ?? 1) === 1;
+            $lCreated = (string) ($lst['created_at'] ?? '');
+            $daysSince = null;
+            if ($lCreated !== '' && ($ts = strtotime($lCreated)) !== false) {
+              $daysSince = (int) floor((time() - $ts) / 86400);
+            }
+            $salaryLabel = null;
+            if ($lMin !== null && $lMax !== null) {
+              $salaryLabel = number_format($lMin, 0, ',', '.') . ' – ' . number_format($lMax, 0, ',', '.') . ' ₺';
+            } elseif ($lMin !== null) {
+              $salaryLabel = number_format($lMin, 0, ',', '.') . ' ₺+';
+            }
+          ?>
+          <article class="ep-poster-card">
+            <div class="ep-poster-card-head">
+              <h3 class="ep-poster-title">
+                <a class="ep-poster-link" href="/isveren-panel.php?ilan=<?= $lId ?>">
+                  <?= htmlspecialchars($lTitle ?: 'İsimsiz ilan', ENT_QUOTES, 'UTF-8') ?>
+                </a>
+              </h3>
+              <span class="ep-poster-status<?= $lActive ? ' is-live' : '' ?>" aria-hidden="true">
+                <span class="ep-poster-dot"></span><?= $lActive ? 'Aktif' : 'Pasif' ?>
+              </span>
+            </div>
+            <?php if ($salaryLabel !== null): ?>
+              <p class="ep-poster-salary"><?= htmlspecialchars($salaryLabel, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+            <div class="ep-poster-chips">
+              <?php if ($lType !== ''): ?><span class="ep-poster-chip"><?= htmlspecialchars($lType, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+              <?php if ($lModel !== ''): ?><span class="ep-poster-chip"><?= htmlspecialchars($lModel, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+              <?php if ($lLocation !== ''): ?><span class="ep-poster-chip ep-poster-chip--ghost"><?= htmlspecialchars($lLocation, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+            </div>
+            <footer class="ep-poster-foot">
+              <span><strong>0</strong> başvuru</span>
+              <span><strong>0</strong> görüntülenme</span>
+              <?php if ($daysSince !== null): ?>
+                <span class="ep-poster-time">
+                  <?php
+                    if ($daysSince <= 0) { echo 'bugün yayında'; }
+                    elseif ($daysSince === 1) { echo '1 gün önce'; }
+                    else { echo $daysSince . ' gün önce'; }
+                  ?>
+                </span>
+              <?php endif; ?>
+              <a class="ep-poster-insights" href="/mercek.php?id=<?= $lId ?>" aria-label="Mercek">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <circle cx="5" cy="5" r="3.2" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M7.5 7.5L10 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+                Mercek
+              </a>
+            </footer>
+          </article>
+          <?php endforeach; ?>
+
+          <a class="ep-poster-card ep-poster-card--add" href="/isveren-panel.php?yeni=1" aria-label="Yeni İlan Oluştur">
+            <span class="ep-poster-card-add-plus" aria-hidden="true">+</span>
+            <span class="ep-poster-card-add-label">Yeni İlan</span>
+          </a>
+        </div>
+      <?php endif; ?>
+    </section>
+    <?php endif; ?>
+
   </div>
 
   <div id="logout-modal" class="logout-modal" role="dialog" aria-modal="true" aria-labelledby="logout-modal-title">
@@ -522,6 +739,7 @@ $panelHidden = static fn (string $key): string =>
     </div>
   </div>
 
+  <script src="frontend/assets/js/employer-topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer-topbar.js') ?>" defer></script>
   <script src="frontend/assets/js/employer-panel.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer-panel.js') ?>" defer></script>
   <script src="frontend/assets/js/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/logout-modal.js') ?>" defer></script>
 </body>
