@@ -19,6 +19,7 @@ if (
     exit;
 }
 
+require_once __DIR__ . '/../../../backend/config/db.php';
 require_once __DIR__ . '/../../../backend/auth/session-helper.php';
 
 $seeker = isset($_SESSION['seeker']) && is_array($_SESSION['seeker']) ? $_SESSION['seeker'] : [];
@@ -26,7 +27,11 @@ $fullName = trim((string) ($seeker['full_name'] ?? ''));
 if ($fullName === '') {
     $fullName = 'Aday';
 }
-$isVerified = (int) ($_SESSION['account']['is_verified'] ?? 0) === 1;
+try {
+    $isVerified = refresh_verification_flag(db());
+} catch (Throwable) {
+    $isVerified = (int) ($_SESSION['account']['is_verified'] ?? 0) === 1;
+}
 $verifyFlash = $_SESSION['flash_verify'] ?? null;
 unset($_SESSION['flash_verify']);
 ?>

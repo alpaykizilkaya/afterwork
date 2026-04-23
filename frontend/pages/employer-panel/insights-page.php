@@ -45,92 +45,168 @@ try {
     $listing = null;
 }
 
-// Localhost dev preview: if no listing found but we're on localhost, render a fake one
-// so the full Mercek page can be previewed without real data in the DB yet.
+// Localhost preview: if no listing exists, fake a shell so the employer can see
+// how the empty Mercek page looks. Analytics queries still run against the real
+// DB, so every number/chart stays at 0 — no mock data, just a skeleton listing.
 $isLocalhost = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000', 'afterwork.test'], true);
 if ($listing === null && $isLocalhost) {
     $listing = [
-        'id' => $listingId,
-        'title' => 'Frontend Geliştirici · Örnek İlan',
+        'id'              => $listingId,
+        'title'           => 'Örnek İlan · Önizleme',
         'employment_type' => 'Tam Zamanlı',
-        'work_model' => 'Hibrit',
-        'location' => 'İstanbul',
-        'salary_min' => 45000,
-        'salary_max' => 72000,
-        'is_active' => 1,
+        'work_model'      => 'Hibrit',
+        'location'        => 'İstanbul',
+        'salary_min'      => null,
+        'salary_max'      => null,
+        'description'     => '',
+        'requirements'    => '',
+        'benefits'        => '',
+        'experience_level'=> '',
+        'skills'          => '',
+        'is_active'       => 1,
     ];
 }
 
-// Real counters — safe to run even if analytics tables don't exist yet
-$totalViews = null;
-$uniqueVisitors = null;
-$totalApplications = null;
-$totalSaves = null;
+// ── Real analytics (tables may be empty — page honestly shows 0 / empty states) ─
+$totalViews = 0;
+$uniqueVisitors = 0;
+$totalApplications = 0;
+$totalSaves = 0;
+
+$days = 30;
+$labels = [];
+$dailyViews = array_fill(0, $days, 0);
+$dailyApps  = array_fill(0, $days, 0);
+$dailySaves = array_fill(0, $days, 0);
+for ($i = $days - 1; $i >= 0; $i--) {
+    $labels[] = date('j M', strtotime("-{$i} days"));
+}
+
+$hourly = [];  // [day_of_week (0=Mon..6=Sun)][hour 0..23] => count
+for ($d = 0; $d < 7; $d++) { $hourly[$d] = array_fill(0, 24, 0); }
+
+$trafficBreakdown = [];   // traffic_source => count
+$deviceBreakdown = [];    // device_type => count
 
 try {
     $pdo = db();
-    $stmt = $pdo->prepare('SELECT COUNT(*) FROM listing_views WHERE listing_id = :id');
-    $stmt->execute(['id' => $listingId]);
-    $totalViews = (int) $stmt->fetchColumn();
 
+    $totalViews        = (int) $pdo->query('SELECT COUNT(*) FROM listing_views WHERE listing_id = ' . (int) $listingId)->fetchColumn();
+    $uniqueVisitors    = (int) $pdo->query('SELECT COUNT(DISTINCT COALESCE(viewer_account_id, viewer_session_hash)) FROM listing_views WHERE listing_id = ' . (int) $listingId)->fetchColumn();
+    $totalApplications = (int) $pdo->query('SELECT COUNT(*) FROM listing_applications WHERE listing_id = ' . (int) $listingId)->fetchColumn();
+    $totalSaves        = (int) $pdo->query('SELECT COUNT(*) FROM listing_saves WHERE listing_id = ' . (int) $listingId)->fetchColumn();
+
+    // Build date-indexed empty buckets for last N days (yyyy-mm-dd keys)
+    $bucketIndex = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $bucketIndex[date('Y-m-d', strtotime("-{$i} days"))] = $days - 1 - $i;
+    }
+
+    $hydrate = function (string $sql, string $dateCol) use ($pdo, $listingId, $bucketIndex) {
+        $arr = array_fill(0, count($bucketIndex), 0);
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['id' => $listingId]);
+        foreach ($stmt->fetchAll() as $row) {
+            $k = (string) ($row[$dateCol] ?? '');
+            if (isset($bucketIndex[$k])) $arr[$bucketIndex[$k]] = (int) $row['c'];
+        }
+        return $arr;
+    };
+
+    $dailyViews = $hydrate(
+        'SELECT DATE(viewed_at) AS d, COUNT(*) AS c FROM listing_views
+         WHERE listing_id = :id AND viewed_at >= DATE_SUB(CURDATE(), INTERVAL ' . ((int) $days - 1) . ' DAY)
+         GROUP BY DATE(viewed_at)',
+        'd'
+    );
+    $dailyApps = $hydrate(
+        'SELECT DATE(submitted_at) AS d, COUNT(*) AS c FROM listing_applications
+         WHERE listing_id = :id AND submitted_at >= DATE_SUB(CURDATE(), INTERVAL ' . ((int) $days - 1) . ' DAY)
+         GROUP BY DATE(submitted_at)',
+        'd'
+    );
+    $dailySaves = $hydrate(
+        'SELECT DATE(saved_at) AS d, COUNT(*) AS c FROM listing_saves
+         WHERE listing_id = :id AND saved_at >= DATE_SUB(CURDATE(), INTERVAL ' . ((int) $days - 1) . ' DAY)
+         GROUP BY DATE(saved_at)',
+        'd'
+    );
+
+    // Hourly heatmap: MySQL DAYOFWEEK -> 1=Sun..7=Sat. Convert to 0=Mon..6=Sun.
     $stmt = $pdo->prepare(
-        'SELECT COUNT(DISTINCT COALESCE(viewer_account_id, viewer_session_hash)) FROM listing_views WHERE listing_id = :id'
+        'SELECT DAYOFWEEK(viewed_at) AS dow, HOUR(viewed_at) AS h, COUNT(*) AS c
+         FROM listing_views WHERE listing_id = :id GROUP BY dow, h'
     );
     $stmt->execute(['id' => $listingId]);
-    $uniqueVisitors = (int) $stmt->fetchColumn();
+    foreach ($stmt->fetchAll() as $row) {
+        $dow = (int) $row['dow'];                // 1..7 (Sun..Sat)
+        $h   = (int) $row['h'];                  // 0..23
+        $idx = ($dow + 5) % 7;                   // 0=Mon..6=Sun
+        $hourly[$idx][$h] = (int) $row['c'];
+    }
 
-    $stmt = $pdo->prepare('SELECT COUNT(*) FROM listing_applications WHERE listing_id = :id');
+    // Traffic source breakdown
+    $stmt = $pdo->prepare(
+        'SELECT COALESCE(NULLIF(traffic_source, ""), "Bilinmiyor") AS s, COUNT(*) AS c
+         FROM listing_views WHERE listing_id = :id GROUP BY s ORDER BY c DESC LIMIT 6'
+    );
     $stmt->execute(['id' => $listingId]);
-    $totalApplications = (int) $stmt->fetchColumn();
+    foreach ($stmt->fetchAll() as $row) {
+        $trafficBreakdown[(string) $row['s']] = (int) $row['c'];
+    }
 
-    $stmt = $pdo->prepare('SELECT COUNT(*) FROM listing_saves WHERE listing_id = :id');
+    // Device breakdown
+    $stmt = $pdo->prepare(
+        'SELECT COALESCE(NULLIF(device_type, ""), "Bilinmiyor") AS d, COUNT(*) AS c
+         FROM listing_views WHERE listing_id = :id GROUP BY d ORDER BY c DESC'
+    );
     $stmt->execute(['id' => $listingId]);
-    $totalSaves = (int) $stmt->fetchColumn();
+    foreach ($stmt->fetchAll() as $row) {
+        $deviceBreakdown[(string) $row['d']] = (int) $row['c'];
+    }
 } catch (Throwable) {
-    // Analytics tables may not be migrated yet — fall back to 0 so the shell still renders.
-    $totalViews = $totalViews ?? 0;
-    $uniqueVisitors = $uniqueVisitors ?? 0;
-    $totalApplications = $totalApplications ?? 0;
-    $totalSaves = $totalSaves ?? 0;
+    // Analytics tables not migrated yet — everything stays 0/empty, page will show empty states.
 }
 
-// If no real data yet, we surface mock/örnek numbers for the KPI strip so the page demonstrates the vision.
-$hasRealData = ($totalViews + $totalApplications + $totalSaves) > 0;
+$fmtNum = static fn (int $n): string => number_format($n, 0, ',', '.');
+$kpis = [
+    ['label' => 'Toplam Görüntülenme', 'value' => $fmtNum($totalViews)],
+    ['label' => 'Benzersiz Ziyaretçi', 'value' => $fmtNum($uniqueVisitors)],
+    ['label' => 'Başvuru Sayısı',      'value' => $fmtNum($totalApplications)],
+    ['label' => 'Kaydedenler',         'value' => $fmtNum($totalSaves)],
+    ['label' => 'Ort. Sayfada Kalma',  'value' => '—'],
+    ['label' => 'Tamamlanma Oranı',    'value' => '—'],
+    ['label' => 'Yanıt Oranı',         'value' => '—'],
+];
 
-$kpis = $hasRealData
-    ? [
-        ['label' => 'Toplam Görüntülenme', 'value' => number_format($totalViews, 0, ',', '.'), 'delta' => null, 'real' => true],
-        ['label' => 'Benzersiz Ziyaretçi', 'value' => number_format((int) $uniqueVisitors, 0, ',', '.'), 'delta' => null, 'real' => true],
-        ['label' => 'Başvuru Sayısı',      'value' => number_format($totalApplications, 0, ',', '.'), 'delta' => null, 'real' => true],
-        ['label' => 'Kaydedenler',         'value' => number_format($totalSaves, 0, ',', '.'), 'delta' => null, 'real' => true],
-        ['label' => 'Ort. Sayfada Kalma',  'value' => '—',     'delta' => null, 'real' => false],
-        ['label' => 'Tamamlanma Oranı',    'value' => '—',     'delta' => null, 'real' => false],
-        ['label' => 'Yanıt Oranı',         'value' => '—',     'delta' => null, 'real' => false],
-    ]
-    : [
-        ['label' => 'Toplam Görüntülenme', 'value' => '1.284', 'delta' => '+12%', 'real' => false],
-        ['label' => 'Benzersiz Ziyaretçi', 'value' => '842',   'delta' => '+8%',  'real' => false],
-        ['label' => 'Başvuru Sayısı',      'value' => '37',    'delta' => '+24%', 'real' => false],
-        ['label' => 'Kaydedenler',         'value' => '96',    'delta' => '+9%',  'real' => false],
-        ['label' => 'Ort. Sayfada Kalma',  'value' => '1:42',  'delta' => null,   'real' => false],
-        ['label' => 'Tamamlanma Oranı',    'value' => '68%',   'delta' => '+3%',  'real' => false],
-        ['label' => 'Yanıt Oranı',         'value' => '54%',   'delta' => null,   'real' => false],
-    ];
+$hasViews   = $totalViews > 0;
+$hasApps    = $totalApplications > 0;
+$hasSaves   = $totalSaves > 0;
+$hasTraffic = array_sum($trafficBreakdown) > 0;
+$hasDevice  = array_sum($deviceBreakdown) > 0;
 
-// Mock timeseries (last 30 days)
-$mockDays = 30;
-$mockViews = [];
-$mockApps = [];
-$mockSaves = [];
-$mockLabels = [];
-for ($i = $mockDays - 1; $i >= 0; $i--) {
-    $ts = strtotime("-{$i} days");
-    $mockLabels[] = date('j M', $ts);
-    $base = 25 + (int) round(30 * sin(($mockDays - $i) / 4) + ($mockDays - $i) * 1.4);
-    $mockViews[] = max(8, $base + random_int(-10, 14));
-    $mockApps[] = max(0, (int) round($base / 8) + random_int(-1, 3));
-    $mockSaves[] = max(0, (int) round($base / 3) + random_int(-2, 5));
+// Listing quality score — computed from listing content, no external data needed
+$qualityScore = 0;
+if ($listing !== null) {
+    $title = trim((string) ($listing['title'] ?? ''));
+    $desc  = trim((string) ($listing['description'] ?? ''));
+    $reqs  = trim((string) ($listing['requirements'] ?? ''));
+    $bens  = trim((string) ($listing['benefits'] ?? ''));
+    $exp   = trim((string) ($listing['experience_level'] ?? ''));
+    $skl   = trim((string) ($listing['skills'] ?? ''));
+    if ($title !== '' && mb_strlen($title) >= 8 && mb_strlen($title) <= 80) $qualityScore += 20;
+    elseif ($title !== '')                                                  $qualityScore += 10;
+    if (mb_strlen($desc) >= 150) $qualityScore += 25;
+    elseif (mb_strlen($desc) >= 60)  $qualityScore += 15;
+    elseif ($desc !== '')            $qualityScore += 5;
+    if ($reqs !== '')                $qualityScore += 15;
+    if (!empty($listing['salary_min']) && !empty($listing['salary_max'])) $qualityScore += 15;
+    elseif (!empty($listing['salary_min']))                               $qualityScore += 8;
+    if ($bens !== '') $qualityScore += 10;
+    if ($exp !== '')  $qualityScore += 5;
+    if ($skl !== '')  $qualityScore += 5;
 }
+$qualityScore = min(100, $qualityScore);
 
 $lTitle = (string) ($listing['title'] ?? 'İlan bulunamadı');
 $lType = (string) ($listing['employment_type'] ?? '');
@@ -185,12 +261,6 @@ if ($lMin !== null && $lMax !== null) {
           <?php if ($lLocation !== ''): ?><span class="in-chip in-chip--ghost"><?= htmlspecialchars($lLocation, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
           <?php if ($salaryLabel !== null): ?><span class="in-chip in-chip--gold"><?= htmlspecialchars($salaryLabel, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
         </div>
-        <?php if (!$hasRealData): ?>
-          <p class="in-hero-notice">
-            <span class="in-notice-dot" aria-hidden="true"></span>
-            Veri toplama yakında başlayacak — aşağıdaki görseller örnek verilerle hazırlanmıştır.
-          </p>
-        <?php endif; ?>
       </header>
 
       <!-- A — KPI şeridi -->
@@ -198,12 +268,9 @@ if ($lMin !== null && $lMax !== null) {
         <h2 class="in-section-title">Özet</h2>
         <div class="in-kpi-strip">
           <?php foreach ($kpis as $k): ?>
-            <div class="in-kpi<?= $k['real'] ? ' is-real' : '' ?>">
+            <div class="in-kpi">
               <span class="in-kpi-label"><?= htmlspecialchars($k['label'], ENT_QUOTES, 'UTF-8') ?></span>
               <strong class="in-kpi-value"><?= htmlspecialchars($k['value'], ENT_QUOTES, 'UTF-8') ?></strong>
-              <?php if (!empty($k['delta'])): ?>
-                <span class="in-kpi-delta"><?= htmlspecialchars($k['delta'], ENT_QUOTES, 'UTF-8') ?></span>
-              <?php endif; ?>
             </div>
           <?php endforeach; ?>
         </div>
@@ -222,24 +289,44 @@ if ($lMin !== null && $lMax !== null) {
         <div class="in-grid in-grid--2">
           <div class="in-card in-card--tall">
             <p class="in-card-kicker">Görüntülenme eğrisi</p>
-            <div class="in-chart in-chart--tall"><canvas id="chart-views"></canvas></div>
+            <?php if ($hasViews): ?>
+              <div class="in-chart in-chart--tall"><canvas id="chart-views"></canvas></div>
+            <?php else: ?>
+              <div class="in-empty">Görüntülenmeler burada çizilecek — veri toplanmaya başladığında otomatik dolar.</div>
+            <?php endif; ?>
           </div>
           <div class="in-card in-card--tall">
             <p class="in-card-kicker">Başvuru akışı</p>
-            <div class="in-chart in-chart--tall"><canvas id="chart-apps"></canvas></div>
+            <?php if ($hasApps): ?>
+              <div class="in-chart in-chart--tall"><canvas id="chart-apps"></canvas></div>
+            <?php else: ?>
+              <div class="in-empty">Henüz başvuru yok.</div>
+            <?php endif; ?>
           </div>
           <div class="in-card">
             <p class="in-card-kicker">Kaydedenler</p>
-            <div class="in-chart"><canvas id="chart-saves"></canvas></div>
+            <?php if ($hasSaves): ?>
+              <div class="in-chart"><canvas id="chart-saves"></canvas></div>
+            <?php else: ?>
+              <div class="in-empty">İlanı kaydeden aday olduğunda burada eğriye döner.</div>
+            <?php endif; ?>
           </div>
           <div class="in-card">
             <p class="in-card-kicker">Dönüşüm (Görüntülenme → Başvuru)</p>
-            <div class="in-chart"><canvas id="chart-ctr"></canvas></div>
+            <?php if ($hasViews && $hasApps): ?>
+              <div class="in-chart"><canvas id="chart-ctr"></canvas></div>
+            <?php else: ?>
+              <div class="in-empty">Görüntülenme + başvuru birlikte geldiğinde dönüşüm eğrisi burada.</div>
+            <?php endif; ?>
           </div>
           <div class="in-card in-card--span2">
             <p class="in-card-kicker">Saatlik ısı haritası · Hangi gün &amp; saat en çok bakılıyor</p>
-            <div class="in-chart in-chart--tall"><canvas id="chart-hourly"></canvas></div>
-            <p class="in-card-note">Yatay eksen: 00:00 – 23:00 · Dikey eksen: Pazartesi – Pazar · Renk yoğunluğu = görüntülenme sayısı.</p>
+            <?php if ($hasViews): ?>
+              <div class="in-chart in-chart--tall"><canvas id="chart-hourly"></canvas></div>
+              <p class="in-card-note">Yatay eksen: 00:00 – 23:00 · Dikey eksen: Pazartesi – Pazar · Renk yoğunluğu = görüntülenme sayısı.</p>
+            <?php else: ?>
+              <div class="in-empty">7 gün × 24 saat'lik ısı haritası, görüntülenme kayıtları oluştukça burada çıkacak.</div>
+            <?php endif; ?>
           </div>
         </div>
       </section>
@@ -247,98 +334,76 @@ if ($lMin !== null && $lMax !== null) {
       <!-- C — Funnel -->
       <section class="in-section">
         <h2 class="in-section-title">Dönüşüm Hunisi</h2>
-        <div class="in-funnel">
-          <?php
-          $funnel = [
-            ['label' => 'İlanı Gördü',       'count' => 1284, 'pct' => 100],
-            ['label' => 'Detayı Açtı',       'count' => 642,  'pct' => 50],
-            ['label' => 'Kaydetti',          'count' => 96,   'pct' => 8],
-            ['label' => 'Başvuru Başlattı',  'count' => 54,   'pct' => 4],
-            ['label' => 'Başvuru Tamamladı', 'count' => 37,   'pct' => 3],
-          ];
-          foreach ($funnel as $i => $step):
-            $prev = $i > 0 ? $funnel[$i - 1]['count'] : null;
-            $drop = $prev ? (int) round((1 - $step['count'] / $prev) * 100) : 0;
-          ?>
-          <div class="in-funnel-row">
-            <div class="in-funnel-bar" style="width: <?= (int) $step['pct'] ?>%;">
-              <span class="in-funnel-label"><?= htmlspecialchars($step['label'], ENT_QUOTES, 'UTF-8') ?></span>
-              <span class="in-funnel-count"><?= number_format($step['count'], 0, ',', '.') ?></span>
+        <?php
+        $funnel = [
+          ['label' => 'İlanı Gördü',       'count' => $totalViews],
+          ['label' => 'Benzersiz Ziyaretçi','count' => $uniqueVisitors],
+          ['label' => 'Kaydetti',          'count' => $totalSaves],
+          ['label' => 'Başvuru Yaptı',     'count' => $totalApplications],
+        ];
+        $funnelTop = max(array_map(fn ($s) => $s['count'], $funnel));
+        ?>
+        <?php if ($funnelTop > 0): ?>
+          <div class="in-funnel">
+            <?php foreach ($funnel as $i => $step):
+              $pct = $funnelTop ? (int) round(($step['count'] / $funnelTop) * 100) : 0;
+              $prev = $i > 0 ? $funnel[$i - 1]['count'] : null;
+              $drop = $prev ? (int) round((1 - $step['count'] / max($prev, 1)) * 100) : 0;
+            ?>
+            <div class="in-funnel-row">
+              <div class="in-funnel-bar" style="width: <?= max(6, $pct) ?>%;">
+                <span class="in-funnel-label"><?= htmlspecialchars($step['label'], ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="in-funnel-count"><?= $fmtNum($step['count']) ?></span>
+              </div>
+              <span class="in-funnel-meta"><?= $pct ?>%<?php if ($i > 0 && $drop > 0): ?> · <span class="in-funnel-drop">−<?= $drop ?>%</span><?php endif; ?></span>
             </div>
-            <span class="in-funnel-meta"><?= $step['pct'] ?>%<?php if ($i > 0 && $drop > 0): ?> · <span class="in-funnel-drop">−<?= $drop ?>%</span><?php endif; ?></span>
+            <?php endforeach; ?>
           </div>
-          <?php endforeach; ?>
-        </div>
+        <?php else: ?>
+          <div class="in-card"><div class="in-empty">Görüntülenme → başvuru akışı burada huni olarak çizilecek.</div></div>
+        <?php endif; ?>
       </section>
 
-      <!-- D — Aday demografisi -->
+      <!-- D — Aday demografisi (requires seeker profile fields + application link) -->
       <section class="in-section">
         <h2 class="in-section-title">Aday Demografisi</h2>
-        <div class="in-grid in-grid--3">
-          <div class="in-card">
-            <p class="in-card-kicker">Cinsiyet</p>
-            <div class="in-chart in-chart--donut"><canvas id="chart-gender"></canvas></div>
-          </div>
-          <div class="in-card">
-            <p class="in-card-kicker">Yaş Aralığı</p>
-            <div class="in-chart"><canvas id="chart-age"></canvas></div>
-          </div>
-          <div class="in-card">
-            <p class="in-card-kicker">Eğitim Seviyesi</p>
-            <div class="in-chart in-chart--donut"><canvas id="chart-education"></canvas></div>
-          </div>
-          <div class="in-card">
-            <p class="in-card-kicker">Deneyim Seviyesi</p>
-            <div class="in-chart in-chart--donut"><canvas id="chart-experience"></canvas></div>
-          </div>
-          <div class="in-card in-card--span2">
-            <p class="in-card-kicker">En çok başvuran 10 üniversite</p>
-            <div class="in-chart in-chart--tall"><canvas id="chart-universities"></canvas></div>
+        <div class="in-card">
+          <div class="in-empty">
+            Cinsiyet · yaş · eğitim · deneyim · üniversite kırılımları, aday profillerindeki alanlar doldurulup başvuru geldikçe burada görünecek.
           </div>
         </div>
       </section>
 
-      <!-- E — Coğrafi -->
+      <!-- E — Coğrafi (requires IP→country+city lookup on view events) -->
       <section class="in-section">
         <h2 class="in-section-title">Coğrafi Dağılım</h2>
         <div class="in-card in-card--map">
           <div class="in-map-head">
             <p class="in-card-kicker">Dünya başvuru ısı haritası</p>
-            <button type="button" id="map-reset" class="in-map-reset" hidden>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <path d="M3 6l3-3M3 6l3 3M3 6h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Dünyaya dön
-            </button>
+            <?php if ($hasViews): ?>
+              <button type="button" id="map-reset" class="in-map-reset" hidden>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path d="M3 6l3-3M3 6l3 3M3 6h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Dünyaya dön
+              </button>
+            <?php endif; ?>
           </div>
-          <div id="tr-map" class="in-map" aria-label="Dünya başvuru haritası">
-            <div class="in-map-loader" id="map-loader" hidden>Şehirler yükleniyor…</div>
-          </div>
-          <div class="in-map-foot">
-            <div class="in-map-legend" aria-label="Yoğunluk ölçeği">
-              <span class="in-map-legend-tick">Az</span>
-              <span class="in-map-legend-grad" aria-hidden="true"></span>
-              <span class="in-map-legend-tick">Çok</span>
+          <?php if ($hasViews): ?>
+            <div id="tr-map" class="in-map" aria-label="Dünya başvuru haritası">
+              <div class="in-map-loader" id="map-loader" hidden>Şehirler yükleniyor…</div>
             </div>
-            <p class="in-map-hint"><span aria-hidden="true">↘</span> Ülkeye tıkla, şehir kırılımı açılsın</p>
-          </div>
-        </div>
-        <div class="in-grid in-grid--2" style="margin-top:1rem;">
-          <div class="in-card">
-            <p class="in-card-kicker">İlk 10 şehir</p>
-            <div class="in-chart in-chart--tall"><canvas id="chart-cities"></canvas></div>
-          </div>
-          <div class="in-card">
-            <p class="in-card-kicker">Şehir dağılımı</p>
-            <ul class="in-stat-list">
-              <li><span>İstanbul</span><strong>48%</strong></li>
-              <li><span>Ankara</span><strong>18%</strong></li>
-              <li><span>İzmir</span><strong>11%</strong></li>
-              <li><span>Bursa</span><strong>6%</strong></li>
-              <li><span>Diğer</span><strong>17%</strong></li>
-            </ul>
-            <p class="in-card-note">Şehir dışı + yurt dışı: <strong>12%</strong></p>
-          </div>
+            <div class="in-map-foot">
+              <div class="in-map-legend" aria-label="Yoğunluk ölçeği">
+                <span class="in-map-legend-tick">Az</span>
+                <span class="in-map-legend-grad" aria-hidden="true"></span>
+                <span class="in-map-legend-tick">Çok</span>
+              </div>
+              <p class="in-map-hint"><span aria-hidden="true">↘</span> Ülkeye tıkla, şehir kırılımı açılsın</p>
+            </div>
+          <?php else: ?>
+            <div class="in-empty">Ziyaretçilerin nereden geldiği, ilana görüntülenme kaydı düştükçe dünya haritasına işlenir.</div>
+          <?php endif; ?>
         </div>
       </section>
 
@@ -348,132 +413,90 @@ if ($lMin !== null && $lMax !== null) {
         <div class="in-grid in-grid--3">
           <div class="in-card">
             <p class="in-card-kicker">Nereden geldi</p>
-            <div class="in-chart in-chart--donut"><canvas id="chart-source"></canvas></div>
+            <?php if ($hasTraffic): ?>
+              <div class="in-chart in-chart--donut"><canvas id="chart-source"></canvas></div>
+            <?php else: ?>
+              <div class="in-empty">Referrer kaydı birikince burada pie grafiği çıkacak.</div>
+            <?php endif; ?>
           </div>
           <div class="in-card">
             <p class="in-card-kicker">Cihaz</p>
-            <div class="in-chart in-chart--donut"><canvas id="chart-device"></canvas></div>
+            <?php if ($hasDevice): ?>
+              <div class="in-chart in-chart--donut"><canvas id="chart-device"></canvas></div>
+            <?php else: ?>
+              <div class="in-empty">Mobil / masaüstü kırılımı veri geldiğinde burada.</div>
+            <?php endif; ?>
           </div>
           <div class="in-card">
             <p class="in-card-kicker">En çok aranan kelimeler</p>
-            <div id="wordcloud" class="in-wordcloud-wrap" aria-label="Anahtar kelime bulutu"></div>
+            <div class="in-empty">Arama sorgu kaydı eklendiğinde kelime bulutu burada çizilecek.</div>
           </div>
         </div>
       </section>
 
-      <!-- G — Rekabet -->
+      <!-- G — Rekabet · Piyasa (requires cross-employer aggregates) -->
       <section class="in-section">
         <div class="in-section-head">
           <h2 class="in-section-title">Rekabet · Piyasa</h2>
           <span class="in-premium-chip">Premium</span>
         </div>
-        <div class="in-grid in-grid--2">
-          <div class="in-card">
-            <p class="in-card-kicker">Rekabet gücü skoru</p>
-            <div class="in-score">
-              <div class="in-score-value">72<span>/100</span></div>
-              <div class="in-score-bar"><span style="width: 72%;"></span></div>
-              <p class="in-score-note">İçerik kalitesi ve maaş bandı üzerinde çalışırsan 80+ mümkün.</p>
-            </div>
-          </div>
-          <div class="in-card">
-            <p class="in-card-kicker">Pozisyon için piyasa ortalaması</p>
-            <ul class="in-stat-list">
-              <li><span>Ort. görüntülenme</span><strong>874</strong></li>
-              <li><span>Ort. başvuru</span><strong>22</strong></li>
-              <li><span>Ort. yayın süresi</span><strong>18 gün</strong></li>
-              <li><span>Maaş ortalaması</span><strong>45.000 – 72.000 ₺</strong></li>
-            </ul>
-          </div>
-          <div class="in-card in-card--span2">
-            <p class="in-card-kicker">Pozisyon talep trendi (son 3 ay)</p>
-            <div class="in-chart"><canvas id="chart-trend"></canvas></div>
+        <div class="in-card">
+          <div class="in-empty">
+            Aynı pozisyon için piyasa ortalamaları ve rekabet skoru — sektörde yeterli ilan &amp; başvuru biriktiğinde burada yayına alınacak.
           </div>
         </div>
       </section>
 
-      <!-- H — Önerilen adaylar -->
+      <!-- H — Önerilen adaylar (requires match engine + seeker profiles) -->
       <section class="in-section">
         <h2 class="in-section-title">Önerilen Adaylar</h2>
-        <div class="in-candidates">
-          <?php
-          $candidates = [
-            ['name' => 'A. Yılmaz',  'match' => 94, 'why' => 'İstenen 3 beceriden 3\'ü eşleşiyor · 5 yıl deneyim'],
-            ['name' => 'D. Kara',    'match' => 88, 'why' => 'React + TypeScript · uzaktan çalışma tercihi'],
-            ['name' => 'E. Toprak',  'match' => 83, 'why' => 'İstanbul · benzer pozisyonda 2 yıl'],
-            ['name' => 'M. Aslan',   'match' => 79, 'why' => 'Junior · hızlı öğrenme göstergeleri yüksek'],
-            ['name' => 'S. Demir',   'match' => 76, 'why' => 'İstenen becerilerden 2\'si var · İzmir'],
-          ];
-          foreach ($candidates as $c):
-          ?>
-          <article class="in-cand-card">
-            <div class="in-cand-avatar" aria-hidden="true"><?= htmlspecialchars(mb_substr($c['name'], 0, 1, 'UTF-8'), ENT_QUOTES, 'UTF-8') ?></div>
-            <div class="in-cand-body">
-              <div class="in-cand-name-row">
-                <strong class="in-cand-name"><?= htmlspecialchars($c['name'], ENT_QUOTES, 'UTF-8') ?></strong>
-                <span class="in-cand-match"><?= (int) $c['match'] ?>%</span>
-              </div>
-              <p class="in-cand-why"><?= htmlspecialchars($c['why'], ENT_QUOTES, 'UTF-8') ?></p>
-            </div>
-            <a class="in-cand-cta" href="#" aria-disabled="true" title="Yakında">Profili Aç</a>
-          </article>
-          <?php endforeach; ?>
+        <div class="in-card">
+          <div class="in-empty">
+            Aranan becerilere göre eşleşen adaylar — aday havuzu ve eşleşme motoru aktifleştiğinde önerilen profiller burada sıralanır.
+          </div>
         </div>
       </section>
 
-      <!-- I — Kalite & öneriler -->
+      <!-- I — Kalite skoru (computed from the listing content itself) -->
       <section class="in-section">
-        <h2 class="in-section-title">İlan Kalitesi · Akıllı Öneriler</h2>
+        <h2 class="in-section-title">İlan Kalitesi</h2>
         <div class="in-grid in-grid--2">
           <div class="in-card">
             <p class="in-card-kicker">İlan skoru</p>
             <div class="in-score">
-              <div class="in-score-value">78<span>/100</span></div>
-              <div class="in-score-bar in-score-bar--green"><span style="width: 78%;"></span></div>
-              <p class="in-score-note">Başlık berrak, açıklama yeterli. Maaş bandı ve yan haklar puanı yükseltebilir.</p>
+              <div class="in-score-value"><?= (int) $qualityScore ?><span>/100</span></div>
+              <div class="in-score-bar<?= $qualityScore >= 70 ? ' in-score-bar--green' : '' ?>"><span style="width: <?= (int) $qualityScore ?>%;"></span></div>
+              <p class="in-score-note">
+                <?php
+                $missing = [];
+                if (empty($listing['salary_min']) || empty($listing['salary_max'])) $missing[] = 'Maaş aralığı';
+                if (empty($listing['benefits']))          $missing[] = 'Yan haklar';
+                if (empty($listing['experience_level'])) $missing[] = 'Deneyim seviyesi';
+                if (empty($listing['skills']))            $missing[] = 'Gerekli beceriler';
+                if ($missing === []) {
+                    echo 'İlanın tüm temel alanlarda dolu görünüyor.';
+                } else {
+                    echo 'Eksik alanlar: ' . htmlspecialchars(implode(' · ', $missing), ENT_QUOTES, 'UTF-8') . '. Bunları doldurursan skor yükselir.';
+                }
+                ?>
+              </p>
             </div>
           </div>
           <div class="in-card">
             <p class="in-card-kicker">Aksiyon önerileri</p>
-            <ul class="in-suggest-list">
-              <li>
-                <span class="in-suggest-icon" aria-hidden="true">+</span>
-                <div><strong>Yan haklar ekle.</strong><br><span>Ilan detayında yan haklar görünürse görüntülenmen <em>%18</em> artabilir.</span></div>
-              </li>
-              <li>
-                <span class="in-suggest-icon" aria-hidden="true">✓</span>
-                <div><strong>"uzaktan" anahtar kelimesini ekle.</strong><br><span>Son 3 günde en çok aranan kelimelerden biri.</span></div>
-              </li>
-              <li>
-                <span class="in-suggest-icon" aria-hidden="true">⏰</span>
-                <div><strong>Yayın saati: Salı 10:00–12:00.</strong><br><span>Bu pozisyona en çok bakılan zaman dilimi.</span></div>
-              </li>
-            </ul>
+            <div class="in-empty">
+              Akıllı öneriler — ilan performansı birkaç gün izlendikten sonra "hangi alan kaç % etki yaratır" bazlı burada listelenecek.
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- J — Davranış -->
+      <!-- J — Davranış (requires event-level tracking: scroll depth, dwell time) -->
       <section class="in-section">
         <h2 class="in-section-title">Etkileşim · Davranış</h2>
-        <div class="in-grid in-grid--3">
-          <div class="in-card">
-            <p class="in-card-kicker">Ortalama sayfada kalma</p>
-            <p class="in-big-stat">1:42 <small>dk</small></p>
-            <p class="in-card-note">Piyasa ortalaması: 1:18</p>
-          </div>
-          <div class="in-card">
-            <p class="in-card-kicker">Geri dönüş oranı</p>
-            <p class="in-big-stat">23%</p>
-            <p class="in-card-note">Ziyaretçilerin yaklaşık 1/4'ü ilanı tekrar açıyor.</p>
-          </div>
-          <div class="in-card">
-            <p class="in-card-kicker">En çok okunan bölüm</p>
-            <ul class="in-stat-list in-stat-list--tight">
-              <li><span>Açıklama</span><strong>64%</strong></li>
-              <li><span>Aranan özellikler</span><strong>22%</strong></li>
-              <li><span>Maaş &amp; yan haklar</span><strong>14%</strong></li>
-            </ul>
+        <div class="in-card">
+          <div class="in-empty">
+            Sayfada kalma süresi, geri dönüş oranı, en çok okunan bölüm — ilan sayfasına event takibi eklendikten sonra buraya düşecek.
           </div>
         </div>
       </section>
@@ -500,10 +523,13 @@ if ($lMin !== null && $lMax !== null) {
 
   <script>
     window.__insightsData = {
-      labels: <?= json_encode($mockLabels, JSON_UNESCAPED_UNICODE) ?>,
-      views:  <?= json_encode($mockViews) ?>,
-      apps:   <?= json_encode($mockApps) ?>,
-      saves:  <?= json_encode($mockSaves) ?>,
+      labels:           <?= json_encode($labels, JSON_UNESCAPED_UNICODE) ?>,
+      views:            <?= json_encode($dailyViews) ?>,
+      apps:             <?= json_encode($dailyApps) ?>,
+      saves:            <?= json_encode($dailySaves) ?>,
+      hourly:           <?= json_encode($hourly) ?>,
+      trafficBreakdown: <?= json_encode($trafficBreakdown, JSON_UNESCAPED_UNICODE) ?>,
+      deviceBreakdown:  <?= json_encode($deviceBreakdown, JSON_UNESCAPED_UNICODE) ?>,
     };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>

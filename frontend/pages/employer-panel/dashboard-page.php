@@ -25,7 +25,11 @@ require_once __DIR__ . '/../../../backend/auth/session-helper.php';
 $employer   = is_array($_SESSION['employer'] ?? null) ? $_SESSION['employer'] : [];
 $employerId = (int) ($employer['id'] ?? 0);
 $companyName = trim((string) ($employer['company_name'] ?? '')) ?: 'Şirketiniz';
-$isVerified = (int) ($_SESSION['account']['is_verified'] ?? 0) === 1;
+try {
+    $isVerified = refresh_verification_flag(db());
+} catch (Throwable) {
+    $isVerified = (int) ($_SESSION['account']['is_verified'] ?? 0) === 1;
+}
 $verifyFlash = $_SESSION['flash_verify'] ?? null;
 unset($_SESSION['flash_verify']);
 
@@ -38,6 +42,7 @@ $showDashboard = $isNewMode || $isProfileMode || $isDetailMode || $_SERVER['REQU
 $showGrid = !$showDashboard;
 
 $listings = [];
+$editListing = null;
 
 // ── Helpers ────────────────────────────────────────────
 $p = static fn (string $key): string => trim((string) ($_POST[$key] ?? ''));
@@ -74,6 +79,14 @@ if ($employerId > 0) {
             );
             $lst->execute(['id' => $employerId]);
             $listings = $lst->fetchAll();
+        }
+
+        if ($isDetailMode) {
+            $detStmt = $pdo->prepare(
+                'SELECT * FROM job_listings WHERE id = :id AND employer_id = :eid LIMIT 1'
+            );
+            $detStmt->execute(['id' => $selectedListingId, 'eid' => $employerId]);
+            $editListing = $detStmt->fetch() ?: null;
         }
     } catch (Throwable) {
         // silent — forms will render empty
@@ -138,9 +151,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'company_profile') {
     }
 }
 
-// ── POST: create job listing ───────────────────────────
+// ── POST: create or update job listing ────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'create_listing') {
-    if (!$isVerified) {
+    $postedListingId = (int) ($_POST['listing_id'] ?? 0);
+    $isEdit = $postedListingId > 0;
+
+    if (!$isEdit && !$isVerified) {
         $listingErrors[] = 'İlan yayınlamadan önce e-posta adresini doğrulaman gerekiyor.';
     }
 
@@ -163,38 +179,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'create_listing') {
     if ($listingErrors === [] && $employerId > 0) {
         try {
             $pdo = db();
-            $pdo->prepare(
-                'INSERT INTO job_listings
-                   (employer_id, title, employment_type, work_model, location,
-                    description, requirements, contact_email,
-                    salary_min, salary_max, benefits, experience_level,
-                    skills, deadline, openings_count, work_hours)
-                 VALUES
-                   (:employer_id, :title, :type, :model, :location,
-                    :desc, :reqs, :email,
-                    :sal_min, :sal_max, :benefits, :exp,
-                    :skills, :deadline, :openings, :hours)'
-            )->execute([
-                'employer_id' => $employerId,
-                'title'       => $jTitle,
-                'type'        => $jType,
-                'model'       => $jModel,
-                'location'    => $jLocation,
-                'desc'        => $jDesc,
-                'reqs'        => $jReqs,
-                'email'       => $jEmail,
-                'sal_min'     => $pInt('salary_min'),
-                'sal_max'     => $pInt('salary_max'),
-                'benefits'    => $pNull('benefits'),
-                'exp'         => $pNull('experience_level'),
-                'skills'      => $pNull('skills'),
-                'deadline'    => $pNull('deadline'),
-                'openings'    => $pInt('openings_count'),
-                'hours'       => $pNull('work_hours'),
-            ]);
+            $params = [
+                'title'    => $jTitle,
+                'type'     => $jType,
+                'model'    => $jModel,
+                'location' => $jLocation,
+                'desc'     => $jDesc,
+                'reqs'     => $jReqs,
+                'email'    => $jEmail,
+                'sal_min'  => $pInt('salary_min'),
+                'sal_max'  => $pInt('salary_max'),
+                'benefits' => $pNull('benefits'),
+                'exp'      => $pNull('experience_level'),
+                'skills'   => $pNull('skills'),
+                'deadline' => $pNull('deadline'),
+                'openings' => $pInt('openings_count'),
+                'hours'    => $pNull('work_hours'),
+            ];
 
-            $activeListings++;
-            $listingSuccess = '"' . htmlspecialchars($jTitle, ENT_QUOTES, 'UTF-8') . '" ilanı başarıyla yayınlandı.';
+            if ($isEdit) {
+                $check = $pdo->prepare('SELECT id FROM job_listings WHERE id = :id AND employer_id = :eid LIMIT 1');
+                $check->execute(['id' => $postedListingId, 'eid' => $employerId]);
+                if (!$check->fetchColumn()) {
+                    $listingErrors[] = 'Bu ilan sana ait değil ya da artık yok.';
+                } else {
+                    $params['id'] = $postedListingId;
+                    $pdo->prepare(
+                        'UPDATE job_listings SET
+                           title = :title, employment_type = :type, work_model = :model,
+                           location = :location, description = :desc, requirements = :reqs,
+                           contact_email = :email, salary_min = :sal_min, salary_max = :sal_max,
+                           benefits = :benefits, experience_level = :exp, skills = :skills,
+                           deadline = :deadline, openings_count = :openings, work_hours = :hours
+                         WHERE id = :id'
+                    )->execute($params);
+
+                    // Refresh the detail state so the form shows saved values
+                    $refresh = $pdo->prepare('SELECT * FROM job_listings WHERE id = :id LIMIT 1');
+                    $refresh->execute(['id' => $postedListingId]);
+                    $editListing = $refresh->fetch() ?: $editListing;
+                    $listingSuccess = '"' . htmlspecialchars($jTitle, ENT_QUOTES, 'UTF-8') . '" ilanı güncellendi.';
+                }
+            } else {
+                $params['employer_id'] = $employerId;
+                $pdo->prepare(
+                    'INSERT INTO job_listings
+                       (employer_id, title, employment_type, work_model, location,
+                        description, requirements, contact_email,
+                        salary_min, salary_max, benefits, experience_level,
+                        skills, deadline, openings_count, work_hours)
+                     VALUES
+                       (:employer_id, :title, :type, :model, :location,
+                        :desc, :reqs, :email,
+                        :sal_min, :sal_max, :benefits, :exp,
+                        :skills, :deadline, :openings, :hours)'
+                )->execute($params);
+
+                $activeListings++;
+                $listingSuccess = '"' . htmlspecialchars($jTitle, ENT_QUOTES, 'UTF-8') . '" ilanı başarıyla yayınlandı.';
+            }
         } catch (Throwable $e) {
             $listingErrors[] = 'İlan kaydedilirken hata oluştu: ' . $e->getMessage();
         }
@@ -210,6 +253,28 @@ $chipActive = static fn (string $key): string =>
     !empty($profile[$key]) ? ' is-active' : '';
 $panelHidden = static fn (string $key): string =>
     !empty($profile[$key]) ? '' : ' hidden';
+
+// ── Pre-fill helpers for listing edit mode ────────────
+$lv = static function (string $key, string $fallback = '') use ($editListing): string {
+    if ($editListing === null) return htmlspecialchars($fallback, ENT_QUOTES, 'UTF-8');
+    $val = $editListing[$key] ?? $fallback;
+    return htmlspecialchars((string) $val, ENT_QUOTES, 'UTF-8');
+};
+$lsel = static function (string $key, string $option) use ($editListing): string {
+    if ($editListing === null) return '';
+    return ((string) ($editListing[$key] ?? '')) === $option ? ' selected' : '';
+};
+$lChipActive = static function (array $keys) use ($editListing): string {
+    if ($editListing === null) return '';
+    foreach ($keys as $k) { if (!empty($editListing[$k])) return ' is-active'; }
+    return '';
+};
+$lOpen = static function (array $keys) use ($editListing): string {
+    if ($editListing === null) return ' hidden';
+    foreach ($keys as $k) { if (!empty($editListing[$k])) return ''; }
+    return ' hidden';
+};
+$isEditing = $isDetailMode && $editListing !== null;
 ?>
 <!doctype html>
 <html lang="tr">
@@ -257,24 +322,39 @@ $panelHidden = static fn (string $key): string =>
     <section class="ep-hero" aria-label="Hoş geldin">
       <div class="ep-hero-inner">
         <div class="ep-hero-text">
-          <p class="ep-kicker">İş Veren Paneli</p>
-          <h1><?= htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8') ?></h1>
-          <p class="ep-hero-lead">Doğru adayı bul, kadroyu güçlendir.</p>
+          <p class="ep-kicker"><?= $isEditing ? 'İlan Detayı' : 'İş Veren Paneli' ?></p>
+          <h1><?= htmlspecialchars($isEditing ? (string) ($editListing['title'] ?? $companyName) : $companyName, ENT_QUOTES, 'UTF-8') ?></h1>
+          <p class="ep-hero-lead"><?= $isEditing ? 'Bu ilanın alanlarını düzenle ya da canlı analizini aç.' : 'Doğru adayı bul, kadroyu güçlendir.' ?></p>
         </div>
-        <div class="ep-hero-stats">
-          <div class="ep-stat-card">
-            <strong><?= $activeListings ?></strong>
-            <span>Aktif İlan</span>
+
+        <?php if ($isEditing): ?>
+          <a class="ep-mercek-cta" href="/mercek.php?id=<?= (int) $selectedListingId ?>">
+            <span class="ep-mercek-cta-kicker">Mercek</span>
+            <span class="ep-mercek-cta-title">Canlı analizi aç</span>
+            <span class="ep-mercek-cta-sub">Görüntülenme, başvuru, aday davranışı</span>
+            <span class="ep-mercek-cta-arrow" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="7.5" cy="7.5" r="4.2" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M10.7 10.7l4.3 4.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </span>
+          </a>
+        <?php else: ?>
+          <div class="ep-hero-stats">
+            <div class="ep-stat-card">
+              <strong><?= $activeListings ?></strong>
+              <span>Aktif İlan</span>
+            </div>
+            <div class="ep-stat-card">
+              <strong>0</strong>
+              <span>Başvuru</span>
+            </div>
+            <div class="ep-stat-card">
+              <strong>0</strong>
+              <span>Görüntülenme</span>
+            </div>
           </div>
-          <div class="ep-stat-card">
-            <strong>0</strong>
-            <span>Başvuru</span>
-          </div>
-          <div class="ep-stat-card">
-            <strong>0</strong>
-            <span>Görüntülenme</span>
-          </div>
-        </div>
+        <?php endif; ?>
       </div>
     </section>
 
@@ -379,12 +459,12 @@ $panelHidden = static fn (string $key): string =>
         </div>
       </aside>
 
-      <!-- RIGHT — Yeni İlan -->
+      <!-- RIGHT — Yeni İlan / İlanı Düzenle -->
       <main class="ep-main" id="yeni-ilan">
         <div class="ep-main-head">
           <div>
-            <h2>Yeni İlan Oluştur</h2>
-            <p>Pozisyonu tanımla, doğru adaya ulaş.</p>
+            <h2><?= $isEditing ? 'İlanı Düzenle' : 'Yeni İlan Oluştur' ?></h2>
+            <p><?= $isEditing ? 'Bu ilanın tüm alanlarını güncelle.' : 'Pozisyonu tanımla, doğru adaya ulaş.' ?></p>
           </div>
           <span class="ep-badge ep-badge--required">Zorunlu</span>
         </div>
@@ -401,13 +481,17 @@ $panelHidden = static fn (string $key): string =>
         <?php endif; ?>
 
         <div class="ep-card">
-          <form class="ep-form" action="isveren-panel.php" method="post">
+          <form class="ep-form" action="<?= $isEditing ? '/isveren-panel.php?ilan=' . (int) $selectedListingId : 'isveren-panel.php' ?>" method="post">
             <input type="hidden" name="mode" value="create_listing">
+            <?php if ($isEditing): ?>
+              <input type="hidden" name="listing_id" value="<?= (int) $selectedListingId ?>">
+            <?php endif; ?>
 
             <div class="ep-field">
               <label for="jl-title">İş Başlığı</label>
               <input id="jl-title" name="title" class="ep-input ep-input--large" type="text"
-                placeholder="örn. Frontend Geliştirici, Pazarlama Uzmanı…" required>
+                placeholder="örn. Frontend Geliştirici, Pazarlama Uzmanı…"
+                value="<?= $lv('title') ?>" required>
             </div>
 
             <div class="ep-field-row ep-field-row--3">
@@ -415,45 +499,43 @@ $panelHidden = static fn (string $key): string =>
                 <label for="jl-type">Çalışma Tipi</label>
                 <select id="jl-type" name="employment_type" class="ep-select" required>
                   <option value="">Seç…</option>
-                  <option>Tam Zamanlı</option>
-                  <option>Yarı Zamanlı</option>
-                  <option>Staj</option>
-                  <option>Sözleşmeli</option>
-                  <option>Freelance</option>
+                  <?php foreach (['Tam Zamanlı','Yarı Zamanlı','Staj','Sözleşmeli','Freelance'] as $opt): ?>
+                    <option<?= $lsel('employment_type', $opt) ?>><?= $opt ?></option>
+                  <?php endforeach; ?>
                 </select>
               </div>
               <div class="ep-field">
                 <label for="jl-model">Çalışma Modeli</label>
                 <select id="jl-model" name="work_model" class="ep-select" required>
                   <option value="">Seç…</option>
-                  <option>Ofiste</option>
-                  <option>Uzaktan</option>
-                  <option>Hibrit</option>
+                  <?php foreach (['Ofiste','Uzaktan','Hibrit'] as $opt): ?>
+                    <option<?= $lsel('work_model', $opt) ?>><?= $opt ?></option>
+                  <?php endforeach; ?>
                 </select>
               </div>
               <div class="ep-field">
                 <label for="jl-location">Konum / Şehir</label>
                 <input id="jl-location" name="location" class="ep-input" type="text"
-                  placeholder="İstanbul" required>
+                  placeholder="İstanbul" value="<?= $lv('location') ?>" required>
               </div>
             </div>
 
             <div class="ep-field">
               <label for="jl-description">İş Tanımı</label>
               <textarea id="jl-description" name="description" class="ep-textarea" rows="6"
-                placeholder="Bu pozisyonda ne yapılacağını, sorumlulukları ve beklentileri açıkla…" required></textarea>
+                placeholder="Bu pozisyonda ne yapılacağını, sorumlulukları ve beklentileri açıkla…" required><?= $lv('description') ?></textarea>
             </div>
 
             <div class="ep-field">
               <label for="jl-requirements">Aranan Özellikler</label>
               <textarea id="jl-requirements" name="requirements" class="ep-textarea" rows="4"
-                placeholder="Aday için gerekli eğitim, deneyim ve yetkinlikleri listele…" required></textarea>
+                placeholder="Aday için gerekli eğitim, deneyim ve yetkinlikleri listele…" required><?= $lv('requirements') ?></textarea>
             </div>
 
             <div class="ep-field">
               <label for="jl-email">Başvuru E-postası</label>
               <input id="jl-email" name="contact_email" class="ep-input" type="email"
-                placeholder="basvuru@sirket.com" required>
+                placeholder="basvuru@sirket.com" value="<?= $lv('contact_email') ?>" required>
             </div>
 
             <div class="ep-divider"></div>
@@ -464,84 +546,82 @@ $panelHidden = static fn (string $key): string =>
                 <span class="ep-chips-hint">isteğe bağlı</span>
               </div>
               <div class="ep-chips">
-                <button type="button" class="ep-chip" data-target="jl-salary">+ Maaş Aralığı</button>
-                <button type="button" class="ep-chip" data-target="jl-benefits">+ Yan Haklar</button>
-                <button type="button" class="ep-chip" data-target="jl-experience">+ Deneyim Seviyesi</button>
-                <button type="button" class="ep-chip" data-target="jl-skills">+ Gerekli Beceriler</button>
-                <button type="button" class="ep-chip" data-target="jl-deadline">+ Son Başvuru Tarihi</button>
-                <button type="button" class="ep-chip" data-target="jl-openings">+ Açık Pozisyon Sayısı</button>
-                <button type="button" class="ep-chip" data-target="jl-hours">+ Çalışma Saatleri</button>
+                <button type="button" class="ep-chip<?= $lChipActive(['salary_min','salary_max']) ?>" data-target="jl-salary">+ Maaş Aralığı</button>
+                <button type="button" class="ep-chip<?= $lChipActive(['benefits']) ?>" data-target="jl-benefits">+ Yan Haklar</button>
+                <button type="button" class="ep-chip<?= $lChipActive(['experience_level']) ?>" data-target="jl-experience">+ Deneyim Seviyesi</button>
+                <button type="button" class="ep-chip<?= $lChipActive(['skills']) ?>" data-target="jl-skills">+ Gerekli Beceriler</button>
+                <button type="button" class="ep-chip<?= $lChipActive(['deadline']) ?>" data-target="jl-deadline">+ Son Başvuru Tarihi</button>
+                <button type="button" class="ep-chip<?= $lChipActive(['openings_count']) ?>" data-target="jl-openings">+ Açık Pozisyon Sayısı</button>
+                <button type="button" class="ep-chip<?= $lChipActive(['work_hours']) ?>" data-target="jl-hours">+ Çalışma Saatleri</button>
               </div>
             </div>
 
-            <div id="jl-salary" class="ep-extra" hidden>
+            <div id="jl-salary" class="ep-extra"<?= $lOpen(['salary_min','salary_max']) ?>>
               <div class="ep-field-row">
                 <div class="ep-field">
                   <label for="jl-salary-min">Minimum Maaş (₺)</label>
-                  <input id="jl-salary-min" name="salary_min" class="ep-input" type="number" placeholder="30000">
+                  <input id="jl-salary-min" name="salary_min" class="ep-input" type="number" placeholder="30000" value="<?= $lv('salary_min') ?>">
                 </div>
                 <div class="ep-field">
                   <label for="jl-salary-max">Maximum Maaş (₺)</label>
-                  <input id="jl-salary-max" name="salary_max" class="ep-input" type="number" placeholder="60000">
+                  <input id="jl-salary-max" name="salary_max" class="ep-input" type="number" placeholder="60000" value="<?= $lv('salary_max') ?>">
                 </div>
               </div>
             </div>
 
-            <div id="jl-benefits" class="ep-extra" hidden>
+            <div id="jl-benefits" class="ep-extra"<?= $lOpen(['benefits']) ?>>
               <div class="ep-field">
                 <label for="jl-benefits-text">Yan Haklar</label>
                 <textarea id="jl-benefits-text" name="benefits" class="ep-textarea" rows="3"
-                  placeholder="Sağlık sigortası, yemek kartı, ulaşım desteği…"></textarea>
+                  placeholder="Sağlık sigortası, yemek kartı, ulaşım desteği…"><?= $lv('benefits') ?></textarea>
               </div>
             </div>
 
-            <div id="jl-experience" class="ep-extra" hidden>
+            <div id="jl-experience" class="ep-extra"<?= $lOpen(['experience_level']) ?>>
               <div class="ep-field">
                 <label for="jl-experience-level">Deneyim Seviyesi</label>
                 <select id="jl-experience-level" name="experience_level" class="ep-select">
                   <option value="">Seç…</option>
-                  <option>Deneyim Aranmıyor</option>
-                  <option>Junior (0–2 yıl)</option>
-                  <option>Mid-level (2–5 yıl)</option>
-                  <option>Senior (5+ yıl)</option>
-                  <option>Lead / Yönetici</option>
+                  <?php foreach (['Deneyim Aranmıyor','Junior (0–2 yıl)','Mid-level (2–5 yıl)','Senior (5+ yıl)','Lead / Yönetici'] as $opt): ?>
+                    <option<?= $lsel('experience_level', $opt) ?>><?= $opt ?></option>
+                  <?php endforeach; ?>
                 </select>
               </div>
             </div>
 
-            <div id="jl-skills" class="ep-extra" hidden>
+            <div id="jl-skills" class="ep-extra"<?= $lOpen(['skills']) ?>>
               <div class="ep-field">
                 <label for="jl-skills-input">Gerekli Beceriler / Teknolojiler</label>
                 <input id="jl-skills-input" name="skills" class="ep-input" type="text"
-                  placeholder="React, Node.js, SQL, Figma…">
+                  placeholder="React, Node.js, SQL, Figma…" value="<?= $lv('skills') ?>">
                 <p class="ep-field-hint">Virgülle ayırarak birden fazla beceri ekleyebilirsin.</p>
               </div>
             </div>
 
-            <div id="jl-deadline" class="ep-extra" hidden>
+            <div id="jl-deadline" class="ep-extra"<?= $lOpen(['deadline']) ?>>
               <div class="ep-field">
                 <label for="jl-deadline-date">Son Başvuru Tarihi</label>
-                <input id="jl-deadline-date" name="deadline" class="ep-input" type="date">
+                <input id="jl-deadline-date" name="deadline" class="ep-input" type="date" value="<?= $lv('deadline') ?>">
               </div>
             </div>
 
-            <div id="jl-openings" class="ep-extra" hidden>
+            <div id="jl-openings" class="ep-extra"<?= $lOpen(['openings_count']) ?>>
               <div class="ep-field">
                 <label for="jl-openings-count">Açık Pozisyon Sayısı</label>
-                <input id="jl-openings-count" name="openings_count" class="ep-input" type="number" placeholder="1" min="1">
+                <input id="jl-openings-count" name="openings_count" class="ep-input" type="number" placeholder="1" min="1" value="<?= $lv('openings_count') ?>">
               </div>
             </div>
 
-            <div id="jl-hours" class="ep-extra" hidden>
+            <div id="jl-hours" class="ep-extra"<?= $lOpen(['work_hours']) ?>>
               <div class="ep-field">
                 <label for="jl-hours-input">Çalışma Saatleri</label>
                 <input id="jl-hours-input" name="work_hours" class="ep-input" type="text"
-                  placeholder="09:00 – 18:00, Pazartesi – Cuma">
+                  placeholder="09:00 – 18:00, Pazartesi – Cuma" value="<?= $lv('work_hours') ?>">
               </div>
             </div>
 
             <button type="submit" class="ep-submit ep-submit--publish">
-              <span>İlanı Yayınla</span>
+              <span><?= $isEditing ? 'Değişiklikleri Kaydet' : 'İlanı Yayınla' ?></span>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>

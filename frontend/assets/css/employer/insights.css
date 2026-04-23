@@ -433,6 +433,20 @@
   line-height: 1.45;
 }
 
+/* Empty state inside a card — honest "no data yet" message */
+.in-empty {
+  padding: 1.8rem 1rem;
+  text-align: center;
+  color: var(--muted-soft);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+  font-weight: 500;
+  background: rgba(37, 55, 69, 0.025);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+}
+
 .in-big-stat {
   margin: 0;
   font-size: 2.2rem;
