@@ -6,7 +6,7 @@ session_start();
 
 // DEV BYPASS — localhost only, remove before pushing to production
 if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
-    $_SESSION['account'] = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'seeker'];
+    $_SESSION['account'] = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'seeker', 'is_verified' => 1];
     $_SESSION['seeker']  = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'full_name' => 'Dev Kullanıcı', 'role' => 'seeker'];
 }
 
@@ -26,6 +26,9 @@ $fullName = trim((string) ($seeker['full_name'] ?? ''));
 if ($fullName === '') {
     $fullName = 'Aday';
 }
+$isVerified = (int) ($_SESSION['account']['is_verified'] ?? 0) === 1;
+$verifyFlash = $_SESSION['flash_verify'] ?? null;
+unset($_SESSION['flash_verify']);
 ?>
 <!doctype html>
 <html lang="tr">
@@ -35,6 +38,7 @@ if ($fullName === '') {
   <title>AFTERWORK | Is Bulan Alani</title>
   <link rel="stylesheet" href="frontend/assets/css/seeker-panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/seeker-panel.css') ?>">
   <link rel="stylesheet" href="frontend/assets/css/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/logout-modal.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/verify-banner.css') ?>">
 </head>
 <body>
   <main class="seeker-page">
@@ -44,6 +48,28 @@ if ($fullName === '') {
       </a>
       <button type="button" class="seeker-exit" data-logout-trigger>Çıkış Yap</button>
     </header>
+
+    <?php if (!$isVerified || $verifyFlash !== null): ?>
+    <div class="verify-banner" role="region" aria-label="E-posta doğrulama">
+      <?php if (!$isVerified): ?>
+        <span class="verify-banner__icon" aria-hidden="true">!</span>
+        <p class="verify-banner__text">
+          <strong>E-posta adresini doğrula.</strong>
+          İlanlara başvurabilmek için <?= htmlspecialchars((string) ($_SESSION['account']['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?> adresine gönderdiğimiz bağlantıya tıklaman gerekiyor.
+        </p>
+        <div class="verify-banner__actions">
+          <form action="/resend-verification.php" method="post" style="margin:0;">
+            <button type="submit" class="verify-banner__btn verify-banner__btn--solid">Yeniden gönder</button>
+          </form>
+        </div>
+      <?php endif; ?>
+      <?php if ($verifyFlash !== null): ?>
+        <p class="verify-banner__flash verify-banner__flash--<?= htmlspecialchars((string) $verifyFlash['type'], ENT_QUOTES, 'UTF-8') ?>">
+          <?= htmlspecialchars((string) $verifyFlash['text'], ENT_QUOTES, 'UTF-8') ?>
+        </p>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
 
     <section class="seeker-hero" aria-label="Is bulan acilis">
       <p class="hero-kicker">Is Bulan Alani</p>
