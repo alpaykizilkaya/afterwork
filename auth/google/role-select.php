@@ -46,7 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->beginTransaction();
 
                 $insert = $pdo->prepare(
-                    'INSERT INTO accounts (email, google_id, password, role) VALUES (:email, :google_id, NULL, :role)'
+                    'INSERT INTO accounts (email, google_id, password, role, is_verified, verified_at)
+                     VALUES (:email, :google_id, NULL, :role, 1, NOW())'
                 );
                 $insert->execute([
                     'email' => $pending['email'],
@@ -71,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'account_id' => $accountId,
                     'email' => $pending['email'],
                     'role' => $role,
+                    'is_verified' => 1,
                 ];
 
                 if ($role === 'employer') {

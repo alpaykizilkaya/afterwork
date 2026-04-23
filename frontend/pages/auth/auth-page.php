@@ -6,6 +6,7 @@ session_start();
 
 require_once __DIR__ . '/../../../backend/config/db.php';
 require_once __DIR__ . '/../../../backend/auth/session-helper.php';
+require_once __DIR__ . '/../../../backend/auth/email-verification.php';
 
 $errors = [];
 $success = null;
@@ -19,7 +20,7 @@ $isRegisterDetails = false;
 $registerNameLabel = 'Kullanıcı Adı';
 
 if (isset($_GET['status']) && $_GET['status'] === 'registered') {
-    $success = 'Kayıt tamamlandı. Şimdi giriş yapabilirsin.';
+    $success = 'Kayıt tamamlandı. E-posta adresine bir doğrulama bağlantısı gönderdik — gelen kutunu kontrol et.';
     $activeTab = 'giris';
 }
 
@@ -102,6 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $pdo->commit();
 
+                try {
+                    send_verification_email($registerEmailValue);
+                } catch (Throwable $mailErr) {
+                    error_log('send_verification_email failed on signup: ' . $mailErr->getMessage());
+                }
+
                 header('Location: auth.php?status=registered#giris');
                 exit;
             } catch (Throwable $e) {
@@ -137,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo = db();
                 $loginStmt = $pdo->prepare(
-                    'SELECT id, email, password, role FROM accounts WHERE email = :email LIMIT 1'
+                    'SELECT id, email, password, role, is_verified FROM accounts WHERE email = :email LIMIT 1'
                 );
                 $loginStmt->execute([
                     'email' => $loginEmailValue,
@@ -152,6 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'account_id' => (int) $account['id'],
                         'email' => $account['email'],
                         'role' => $account['role'],
+                        'is_verified' => (int) $account['is_verified'],
                     ];
 
                     if ($account['role'] === 'employer') {

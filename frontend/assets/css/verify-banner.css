@@ -1,0 +1,112 @@
+/* ─── E-POSTA DOĞRULAMA BANNERI ──────────────────────── */
+
+.verify-banner {
+  position: relative;
+  z-index: 15;
+  padding: 0.75rem 2.4rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: linear-gradient(90deg, #3a2a12 0%, #5a3f1c 60%, #3a2a12 100%);
+  color: #fbefd9;
+  border-bottom: 1px solid rgba(217, 181, 131, 0.28);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.verify-banner[hidden] { display: none; }
+
+.verify-banner__icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: rgba(217, 181, 131, 0.22);
+  color: #f3d79f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.verify-banner__text {
+  margin: 0;
+  flex: 1 1 280px;
+}
+
+.verify-banner__text strong { color: #fefcff; font-weight: 700; }
+
+.verify-banner__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.verify-banner__btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(251, 239, 217, 0.42);
+  color: #fbefd9;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.verify-banner__btn:hover {
+  background: rgba(251, 239, 217, 0.1);
+  border-color: rgba(251, 239, 217, 0.7);
+  color: #fff;
+}
+
+.verify-banner__btn--solid {
+  background: rgba(251, 239, 217, 0.92);
+  border-color: rgba(251, 239, 217, 0.92);
+  color: #3a2a12;
+}
+
+.verify-banner__btn--solid:hover {
+  background: #fff;
+  color: #2a1c0b;
+}
+
+.verify-banner__flash {
+  width: 100%;
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  background: rgba(251, 239, 217, 0.1);
+  border: 1px solid rgba(251, 239, 217, 0.18);
+}
+
+.verify-banner__flash--success {
+  background: rgba(129, 199, 132, 0.18);
+  border-color: rgba(129, 199, 132, 0.4);
+  color: #d7f5d9;
+}
+
+.verify-banner__flash--error {
+  background: rgba(231, 111, 103, 0.18);
+  border-color: rgba(231, 111, 103, 0.4);
+  color: #fadad6;
+}
+
+@media (max-width: 640px) {
+  .verify-banner {
+    padding: 0.7rem 1rem;
+  }
+  .verify-banner__actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}

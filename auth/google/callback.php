@@ -9,10 +9,15 @@ require_once __DIR__ . '/../../backend/config/db.php';
 
 function google_login_redirect(PDO $pdo, int $accountId, string $email, string $role): void
 {
+    $verifiedStmt = $pdo->prepare('SELECT is_verified FROM accounts WHERE id = :id LIMIT 1');
+    $verifiedStmt->execute(['id' => $accountId]);
+    $isVerified = (int) ($verifiedStmt->fetchColumn() ?: 0);
+
     $_SESSION['account'] = [
         'account_id' => $accountId,
         'email' => $email,
         'role' => $role,
+        'is_verified' => $isVerified,
     ];
 
     if ($role === 'employer') {
@@ -98,7 +103,13 @@ try {
     $account = $stmt->fetch();
 
     if ($account) {
-        $link = $pdo->prepare('UPDATE accounts SET google_id = :google_id WHERE id = :id');
+        $link = $pdo->prepare(
+            'UPDATE accounts
+             SET google_id = :google_id,
+                 is_verified = 1,
+                 verified_at = COALESCE(verified_at, NOW())
+             WHERE id = :id'
+        );
         $link->execute(['google_id' => $googleId, 'id' => $account['id']]);
 
         google_login_redirect($pdo, (int) $account['id'], $account['email'], $account['role']);

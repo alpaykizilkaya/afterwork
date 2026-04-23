@@ -384,6 +384,10 @@ body {
   font-size: 0.98rem;
   font-weight: 700;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease, background-color 0.22s ease;
 }
 
