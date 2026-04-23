@@ -364,9 +364,9 @@
 
   </main>
 
-  <script src="frontend/assets/js/splash.js?v=<?= filemtime(__DIR__ . '/../../assets/js/splash.js') ?>" defer></script>
-  <script src="frontend/assets/js/jobs-slider.js?v=<?= filemtime(__DIR__ . '/../../assets/js/jobs-slider.js') ?>" defer></script>
-  <script src="frontend/assets/js/media-hover.js?v=<?= filemtime(__DIR__ . '/../../assets/js/media-hover.js') ?>" defer></script>
-  <script src="frontend/assets/js/cursor-effects.js?v=<?= filemtime(__DIR__ . '/../../assets/js/cursor-effects.js') ?>" defer></script>
+  <script src="frontend/assets/js/home/splash.js?v=<?= filemtime(__DIR__ . '/../../assets/js/home/splash.js') ?>" defer></script>
+  <script src="frontend/assets/js/home/jobs-slider.js?v=<?= filemtime(__DIR__ . '/../../assets/js/home/jobs-slider.js') ?>" defer></script>
+  <script src="frontend/assets/js/home/media-hover.js?v=<?= filemtime(__DIR__ . '/../../assets/js/home/media-hover.js') ?>" defer></script>
+  <script src="frontend/assets/js/home/cursor-effects.js?v=<?= filemtime(__DIR__ . '/../../assets/js/home/cursor-effects.js') ?>" defer></script>
 </body>
 </html>

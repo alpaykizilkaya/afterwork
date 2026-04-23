@@ -36,9 +36,9 @@ unset($_SESSION['flash_verify']);
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | Is Bulan Alani</title>
-  <link rel="stylesheet" href="frontend/assets/css/seeker-panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/seeker-panel.css') ?>">
-  <link rel="stylesheet" href="frontend/assets/css/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/logout-modal.css') ?>">
-  <link rel="stylesheet" href="frontend/assets/css/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/verify-banner.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/seeker/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/seeker/panel.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/shared/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/verify-banner.css') ?>">
 </head>
 <body>
   <main class="seeker-page">
@@ -96,6 +96,6 @@ unset($_SESSION['flash_verify']);
     </div>
   </div>
 
-  <script src="frontend/assets/js/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/logout-modal.js') ?>" defer></script>
+  <script src="frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
 </body>
 </html>

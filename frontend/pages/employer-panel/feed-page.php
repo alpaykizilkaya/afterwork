@@ -30,8 +30,8 @@ $companyName = trim((string) ($employer['company_name'] ?? '')) ?: 'Şirketiniz'
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | Akış</title>
-  <link rel="stylesheet" href="/frontend/assets/css/employer-panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer-panel.css') ?>">
-  <link rel="stylesheet" href="/frontend/assets/css/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/logout-modal.css') ?>">
+  <link rel="stylesheet" href="/frontend/assets/css/employer/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/panel.css') ?>">
+  <link rel="stylesheet" href="/frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
 </head>
 <body>
   <div class="ep-page">
@@ -66,7 +66,7 @@ $companyName = trim((string) ($employer['company_name'] ?? '')) ?: 'Şirketiniz'
     </div>
   </div>
 
-  <script src="/frontend/assets/js/employer-topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer-topbar.js') ?>" defer></script>
-  <script src="/frontend/assets/js/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/logout-modal.js') ?>" defer></script>
+  <script src="/frontend/assets/js/employer/topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/topbar.js') ?>" defer></script>
+  <script src="/frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
 </body>
 </html>

@@ -217,9 +217,9 @@ $panelHidden = static fn (string $key): string =>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | İş Veren Paneli</title>
-  <link rel="stylesheet" href="frontend/assets/css/employer-panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer-panel.css') ?>">
-  <link rel="stylesheet" href="frontend/assets/css/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/logout-modal.css') ?>">
-  <link rel="stylesheet" href="frontend/assets/css/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/verify-banner.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/employer/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/panel.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/shared/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/verify-banner.css') ?>">
 </head>
 <body>
   <div class="ep-page">
@@ -739,8 +739,8 @@ $panelHidden = static fn (string $key): string =>
     </div>
   </div>
 
-  <script src="frontend/assets/js/employer-topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer-topbar.js') ?>" defer></script>
-  <script src="frontend/assets/js/employer-panel.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer-panel.js') ?>" defer></script>
-  <script src="frontend/assets/js/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/logout-modal.js') ?>" defer></script>
+  <script src="frontend/assets/js/employer/topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/topbar.js') ?>" defer></script>
+  <script src="frontend/assets/js/employer/panel.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/panel.js') ?>" defer></script>
+  <script src="frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
 </body>
 </html>

@@ -151,9 +151,9 @@ if ($lMin !== null && $lMax !== null) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | Mercek — <?= htmlspecialchars($lTitle, ENT_QUOTES, 'UTF-8') ?></title>
-  <link rel="stylesheet" href="/frontend/assets/css/employer-panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer-panel.css') ?>">
-  <link rel="stylesheet" href="/frontend/assets/css/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/logout-modal.css') ?>">
-  <link rel="stylesheet" href="/frontend/assets/css/insights.css?v=<?= filemtime(__DIR__ . '/../../assets/css/insights.css') ?>">
+  <link rel="stylesheet" href="/frontend/assets/css/employer/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/panel.css') ?>">
+  <link rel="stylesheet" href="/frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
+  <link rel="stylesheet" href="/frontend/assets/css/employer/insights.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/insights.css') ?>">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 </head>
 <body class="ep-insights-body">
@@ -510,8 +510,8 @@ if ($lMin !== null && $lMax !== null) {
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js" defer></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js" defer></script>
-  <script src="/frontend/assets/js/employer-topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer-topbar.js') ?>" defer></script>
-  <script src="/frontend/assets/js/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/logout-modal.js') ?>" defer></script>
-  <script src="/frontend/assets/js/insights.js?v=<?= filemtime(__DIR__ . '/../../assets/js/insights.js') ?>" defer></script>
+  <script src="/frontend/assets/js/employer/topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/topbar.js') ?>" defer></script>
+  <script src="/frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
+  <script src="/frontend/assets/js/employer/insights.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/insights.js') ?>" defer></script>
 </body>
 </html>
