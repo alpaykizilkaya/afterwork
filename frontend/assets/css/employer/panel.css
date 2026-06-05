@@ -1359,6 +1359,25 @@ body {
   margin: 0.2rem 0;
 }
 
+/* ─── CHECKBOX ────────────────────────────────────────── */
+
+.ep-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--ink);
+  user-select: none;
+}
+
+.ep-check input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 /* ─── CHIPS ───────────────────────────────────────────── */
 
 .ep-chips-row { display: grid; gap: 0.5rem; }

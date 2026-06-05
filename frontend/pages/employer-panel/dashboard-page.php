@@ -20,7 +20,10 @@ if (
 }
 
 require_once __DIR__ . '/../../../backend/config/db.php';
+require_once __DIR__ . '/../../../backend/config/taxonomy.php';
 require_once __DIR__ . '/../../../backend/auth/session-helper.php';
+
+$tax = aw_taxonomy();
 
 $employer   = is_array($_SESSION['employer'] ?? null) ? $_SESSION['employer'] : [];
 $employerId = (int) ($employer['id'] ?? 0);
@@ -184,6 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'create_listing') {
                 'type'     => $jType,
                 'model'    => $jModel,
                 'location' => $jLocation,
+                'district' => $pNull('district'),
                 'desc'     => $jDesc,
                 'reqs'     => $jReqs,
                 'email'    => $jEmail,
@@ -191,6 +195,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'create_listing') {
                 'sal_max'  => $pInt('salary_max'),
                 'benefits' => $pNull('benefits'),
                 'exp'      => $pNull('experience_level'),
+                'dept'     => $pNull('department'),
+                'poslevel' => $pNull('position_level'),
+                'edu'      => $pNull('education_level'),
+                'lang'     => $p('listing_language') !== '' ? $p('listing_language') : 'Türkçe',
+                'disab'    => isset($_POST['is_disability']) ? 1 : 0,
                 'skills'   => $pNull('skills'),
                 'deadline' => $pNull('deadline'),
                 'openings' => $pInt('openings_count'),
@@ -207,9 +216,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $p('mode') === 'create_listing') {
                     $pdo->prepare(
                         'UPDATE job_listings SET
                            title = :title, employment_type = :type, work_model = :model,
-                           location = :location, description = :desc, requirements = :reqs,
+                           location = :location, district = :district, description = :desc, requirements = :reqs,
                            contact_email = :email, salary_min = :sal_min, salary_max = :sal_max,
-                           benefits = :benefits, experience_level = :exp, skills = :skills,
+                           benefits = :benefits, experience_level = :exp,
+                           department = :dept, position_level = :poslevel, education_level = :edu,
+                           listing_language = :lang, is_disability = :disab, skills = :skills,
                            deadline = :deadline, openings_count = :openings, work_hours = :hours
                          WHERE id = :id'
                     )->execute($params);
@@ -496,29 +507,81 @@ $isEditing = $isDetailMode && $editListing !== null;
 
             <div class="ep-field-row ep-field-row--3">
               <div class="ep-field">
-                <label for="jl-type">Çalışma Tipi</label>
+                <label for="jl-type">Çalışma Şekli</label>
                 <select id="jl-type" name="employment_type" class="ep-select" required>
                   <option value="">Seç…</option>
-                  <?php foreach (['Tam Zamanlı','Yarı Zamanlı','Staj','Sözleşmeli','Freelance'] as $opt): ?>
-                    <option<?= $lsel('employment_type', $opt) ?>><?= $opt ?></option>
+                  <?php foreach ($tax['employment_types'] as $opt): ?>
+                    <option<?= $lsel('employment_type', $opt) ?>><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
                   <?php endforeach; ?>
                 </select>
               </div>
               <div class="ep-field">
-                <label for="jl-model">Çalışma Modeli</label>
+                <label for="jl-model">Çalışma Tercihi</label>
                 <select id="jl-model" name="work_model" class="ep-select" required>
                   <option value="">Seç…</option>
-                  <?php foreach (['Ofiste','Uzaktan','Hibrit'] as $opt): ?>
-                    <option<?= $lsel('work_model', $opt) ?>><?= $opt ?></option>
+                  <?php foreach ($tax['work_models'] as $opt): ?>
+                    <option<?= $lsel('work_model', $opt) ?>><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
                   <?php endforeach; ?>
                 </select>
               </div>
+              <div class="ep-field">
+                <label for="jl-language">İlan Dili</label>
+                <?php $curLang = (string) ($editListing['listing_language'] ?? '') ?: 'Türkçe'; ?>
+                <select id="jl-language" name="listing_language" class="ep-select">
+                  <?php foreach ($tax['languages'] as $opt): ?>
+                    <option<?= $curLang === $opt ? ' selected' : '' ?>><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+
+            <div class="ep-field-row ep-field-row--3">
               <div class="ep-field">
                 <label for="jl-location">Konum / Şehir</label>
                 <input id="jl-location" name="location" class="ep-input" type="text"
                   placeholder="İstanbul" value="<?= $lv('location') ?>" required>
               </div>
+              <div class="ep-field">
+                <label for="jl-district">İlçe</label>
+                <input id="jl-district" name="district" class="ep-input" type="text"
+                  placeholder="Kadıköy" value="<?= $lv('district') ?>">
+              </div>
+              <div class="ep-field">
+                <label for="jl-department">Departman</label>
+                <select id="jl-department" name="department" class="ep-select">
+                  <option value="">Seç…</option>
+                  <?php foreach ($tax['departments'] as $opt): ?>
+                    <option<?= $lsel('department', $opt) ?>><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
             </div>
+
+            <div class="ep-field-row">
+              <div class="ep-field">
+                <label for="jl-position-level">Pozisyon Seviyesi</label>
+                <select id="jl-position-level" name="position_level" class="ep-select">
+                  <option value="">Seç…</option>
+                  <?php foreach ($tax['position_levels'] as $opt): ?>
+                    <option<?= $lsel('position_level', $opt) ?>><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="ep-field">
+                <label for="jl-education">Eğitim Seviyesi</label>
+                <select id="jl-education" name="education_level" class="ep-select">
+                  <option value="">Seç…</option>
+                  <?php foreach ($tax['education_levels'] as $opt): ?>
+                    <option<?= $lsel('education_level', $opt) ?>><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+
+            <label class="ep-check">
+              <input type="checkbox" name="is_disability" value="1"<?= (int) ($editListing['is_disability'] ?? 0) === 1 ? ' checked' : '' ?>>
+              <span>Bu bir engelli ilanıdır</span>
+            </label>
 
             <div class="ep-field">
               <label for="jl-description">İş Tanımı</label>
