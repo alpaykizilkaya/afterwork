@@ -55,6 +55,70 @@ if ($listing === null) {
     exit;
 }
 
+/* ---- record a view (feeds Mercek analytics) --------------------------- *
+ * One view per session per listing per 30 min so refreshes don't inflate.
+ * The listing owner viewing their own listing is not counted. Analytics
+ * must never break the page, so the whole block is best-effort. */
+try {
+    $viewerAccountId  = (int) ($_SESSION['account']['account_id'] ?? 0);
+    $viewerEmployerId = (int) ($employer['id'] ?? 0);
+    $isOwnerView      = $viewerEmployerId > 0 && (int) ($listing['employer_id'] ?? 0) === $viewerEmployerId;
+
+    if (!$isOwnerView) {
+        $sessionHash = hash('sha256', (session_id() ?: '') . '|' . ($_SERVER['REMOTE_ADDR'] ?? ''));
+
+        $recent = $pdo->prepare(
+            'SELECT 1 FROM listing_views
+              WHERE listing_id = :id AND viewer_session_hash = :sh
+                AND viewed_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+              LIMIT 1'
+        );
+        $recent->execute(['id' => $viewId, 'sh' => $sessionHash]);
+
+        if (!$recent->fetchColumn()) {
+            $ref  = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+            $host = (string) (parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST) ?: '');
+            $source = 'Direkt';
+            if ($ref !== '') {
+                $refHost = (string) (parse_url($ref, PHP_URL_HOST) ?: '');
+                if ($refHost === '' || strcasecmp($refHost, $host) === 0) {
+                    $source = str_contains($ref, '/akis') ? 'Akış' : 'Site içi';
+                } elseif (preg_match('/google|bing|yahoo|yandex|duckduckgo|ecosia/i', $refHost)) {
+                    $source = 'Arama';
+                } elseif (preg_match('/linkedin|twitter|x\.com|facebook|instagram|t\.co/i', $refHost)) {
+                    $source = 'Sosyal';
+                } else {
+                    $source = 'Dış bağlantı';
+                }
+            }
+
+            $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+            $device = 'Masaüstü';
+            if (preg_match('/iPad|Tablet|PlayBook|Silk/i', $ua)) {
+                $device = 'Tablet';
+            } elseif (preg_match('/Mobi|Android|iPhone|iPod|Windows Phone/i', $ua)) {
+                $device = 'Mobil';
+            }
+
+            $pdo->prepare(
+                'INSERT INTO listing_views
+                    (listing_id, viewer_account_id, viewer_session_hash, referrer, traffic_source, device_type, user_agent)
+                 VALUES (:id, :acc, :sh, :ref, :src, :dev, :ua)'
+            )->execute([
+                'id'  => $viewId,
+                'acc' => $viewerAccountId > 0 ? $viewerAccountId : null,
+                'sh'  => $sessionHash,
+                'ref' => $ref !== '' ? mb_substr($ref, 0, 512) : null,
+                'src' => $source,
+                'dev' => $device,
+                'ua'  => $ua !== '' ? mb_substr($ua, 0, 512) : null,
+            ]);
+        }
+    }
+} catch (Throwable) {
+    // analytics is best-effort — never let it break the listing view
+}
+
 $initials = static function (string $name): string {
     $words = preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: ['?'];
     $a = mb_substr((string) ($words[0] ?? '?'), 0, 1, 'UTF-8');

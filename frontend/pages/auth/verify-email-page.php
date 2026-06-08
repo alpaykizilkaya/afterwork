@@ -91,7 +91,7 @@ $heading = match ($state) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | E-posta Doğrulama</title>
-  <link rel="stylesheet" href="frontend/assets/css/auth.css?v=<?= filemtime(__DIR__ . '/../../assets/css/auth.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/auth/auth.css?v=<?= filemtime(__DIR__ . '/../../assets/css/auth/auth.css') ?>">
 </head>
 <body>
   <main class="auth-page">

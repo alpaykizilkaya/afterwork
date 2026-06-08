@@ -5,3 +5,8 @@ deployment:
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/cp -R frontend backend auth $DEPLOYPATH
     - /bin/cp -R *.php $DEPLOYPATH
+    - /bin/cp -f .htaccess $DEPLOYPATH
+    # cp never deletes — remove the per-URL root files (and stale assets) the
+    # front-controller migration retired, so public_html doesn't serve them.
+    - /bin/rm -f $DEPLOYPATH/akis.php $DEPLOYPATH/auth.php $DEPLOYPATH/forgot-password.php $DEPLOYPATH/is-bul.php $DEPLOYPATH/isveren-panel.php $DEPLOYPATH/logout.php $DEPLOYPATH/mercek.php $DEPLOYPATH/mesajlar.php $DEPLOYPATH/resend-verification.php $DEPLOYPATH/reset-password.php $DEPLOYPATH/seeker-panel.php $DEPLOYPATH/verify-email.php
+    - /bin/rm -f $DEPLOYPATH/frontend/assets/css/auth.css $DEPLOYPATH/frontend/assets/css/home.css $DEPLOYPATH/frontend/assets/js/auth.js $DEPLOYPATH/frontend/pages/seeker-panel/seeker-dashboard.php

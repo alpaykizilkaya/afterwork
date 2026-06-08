@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK</title>
-  <link rel="stylesheet" href="frontend/assets/css/home.css?v=<?= filemtime(__DIR__ . '/../../assets/css/home.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/home/home.css?v=<?= filemtime(__DIR__ . '/../../assets/css/home/home.css') ?>">
 </head>
 <body>
   <div id="splash" class="splash">

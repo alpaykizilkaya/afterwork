@@ -229,7 +229,7 @@ if ($selectedRole === 'employer') {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | Hesap</title>
-  <link rel="stylesheet" href="frontend/assets/css/auth.css?v=<?= filemtime(__DIR__ . '/../../assets/css/auth.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/auth/auth.css?v=<?= filemtime(__DIR__ . '/../../assets/css/auth/auth.css') ?>">
 </head>
 <body>
   <main class="auth-page">
@@ -373,6 +373,6 @@ if ($selectedRole === 'employer') {
     </section>
   </main>
 
-  <script src="frontend/assets/js/auth.js?v=<?= filemtime(__DIR__ . '/../../assets/js/auth.js') ?>" defer></script>
+  <script src="frontend/assets/js/auth/auth.js?v=<?= filemtime(__DIR__ . '/../../assets/js/auth/auth.js') ?>" defer></script>
 </body>
 </html>

@@ -4,6 +4,41 @@
    only adds the filter toolbar, the company header on each card,
    and the feed empty state. */
 
+/* ─── Akış type switch (İlanlar / İş Verenler / İş Arayanlar) ───────────
+   Same segmented-pill treatment as the Mesajlar switch, sized for the feed. */
+.feed-switch {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-bottom: 1.1rem;
+  padding: 0.32rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.feed-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1.1rem;
+  font: 600 0.88rem/1 inherit;
+  letter-spacing: 0.01em;
+  color: var(--muted-soft);
+  text-decoration: none;
+  border-radius: 10px;
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+.feed-switch-btn:hover { color: var(--ink); }
+.feed-switch-btn.is-on {
+  color: #fefcff;
+  background: var(--accent);
+  box-shadow: 0 6px 16px rgba(6, 20, 27, 0.18);
+}
+
+@media (max-width: 560px) {
+  .feed-switch { display: flex; width: 100%; }
+  .feed-switch-btn { flex: 1; padding: 0.5rem 0.4rem; }
+}
+
 .ep-feed-filters {
   /* position + z-index lifts the whole toolbar (and its open dropdowns) above
      the listing grid that follows it in the DOM. The backdrop-filter makes this

@@ -1,0 +1,11 @@
+# Front controller routing.
+# Real files and directories (assets, auth/google/*.php, index.php, …) are
+# served directly; every other request is funneled through index.php, which
+# maps the URL to the right page. Keeps clean per-URL behavior without a file
+# per URL at the web root.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>

@@ -417,6 +417,8 @@ $sortLabels = [
         </div>
       </header>
 
+      <?php $activeFeedTab = 'ilanlar'; include __DIR__ . '/../../partials/feed-switch.php'; ?>
+
       <form class="ep-feed-filters" method="get" action="/akis.php" role="search">
         <div class="ep-feed-search">
           <svg class="ep-feed-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
