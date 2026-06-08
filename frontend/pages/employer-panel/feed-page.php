@@ -283,7 +283,7 @@ try {
             jl.salary_min, jl.salary_max, jl.experience_level, jl.skills,
             jl.department, jl.position_level, jl.education_level, jl.listing_language,
             jl.is_disability, jl.description, jl.contact_email, jl.created_at,
-            e.company_name, e.sector, e.city, e.is_iso500
+            e.company_name, e.sector, e.city, e.is_iso500, e.account_id
          FROM job_listings jl
          JOIN employers e ON e.id = jl.employer_id
          WHERE " . implode(' AND ', $where) . "
@@ -505,6 +505,7 @@ $sortLabels = [
             $lMax = $lst['salary_max'] !== null ? (int) $lst['salary_max'] : null;
             $lDesc = trim((string) ($lst['description'] ?? ''));
             $lEmail = trim((string) ($lst['contact_email'] ?? ''));
+            $lAccId = (int) ($lst['account_id'] ?? 0);
             $sal = $salaryLabel($lMin, $lMax);
             $ago = $feedTimeAgo((string) ($lst['created_at'] ?? ''));
             $locLabel = $lDistrict !== '' && $lLocation !== '' ? $lLocation . ' · ' . $lDistrict : $lLocation;
@@ -557,11 +558,21 @@ $sortLabels = [
               <?php if ($ago !== null): ?>
                 <span class="ep-poster-time ep-feed-posted"><?= htmlspecialchars($ago, ENT_QUOTES, 'UTF-8') ?></span>
               <?php endif; ?>
-              <?php if ($lEmail !== ''): ?>
-                <a class="ep-feed-contact" href="mailto:<?= htmlspecialchars($lEmail, ENT_QUOTES, 'UTF-8') ?>?subject=<?= rawurlencode($lTitle . ' ilanı hakkında') ?>">
-                  İletişim
-                </a>
-              <?php endif; ?>
+              <span class="ep-feed-foot-actions">
+                <?php if ($lAccId > 0 && $lAccId !== $employerId): ?>
+                  <a class="ep-feed-msg" href="/mesaj-baslat.php?account=<?= $lAccId ?>&listing=<?= (int) $lst['id'] ?>">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 5h16v11H8l-4 3V5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                    </svg>
+                    Mesaj at
+                  </a>
+                <?php endif; ?>
+                <?php if ($lEmail !== ''): ?>
+                  <a class="ep-feed-contact" href="mailto:<?= htmlspecialchars($lEmail, ENT_QUOTES, 'UTF-8') ?>?subject=<?= rawurlencode($lTitle . ' ilanı hakkında') ?>">
+                    İletişim
+                  </a>
+                <?php endif; ?>
+              </span>
             </footer>
           </article>
           <?php endforeach; ?>

@@ -77,14 +77,15 @@ function aw_inbox(PDO $pdo, int $me, string $side): array
         // I'm the employer side; counterpart is the applicant (seeker).
         $sql = "SELECT c.id, c.listing_id, c.last_message_at,
                        c.seeker_account_id AS other_id,
-                       COALESCE(NULLIF(s.full_name,''), SUBSTRING_INDEX(a.email,'@',1), 'Aday') AS title,
+                       COALESCE(NULLIF(s.full_name,''), NULLIF(e.company_name,''), SUBSTRING_INDEX(a.email,'@',1), 'Aday') AS title,
                        l.title AS listing_title,
                        (SELECT body FROM messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
                        (SELECT sender_account_id FROM messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender,
                        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.sender_account_id<>:me_s AND m.read_at IS NULL) AS unread
                 FROM conversations c
-                LEFT JOIN seekers  s ON s.account_id=c.seeker_account_id
-                LEFT JOIN accounts a ON a.id=c.seeker_account_id
+                LEFT JOIN seekers   s ON s.account_id=c.seeker_account_id
+                LEFT JOIN employers e ON e.account_id=c.seeker_account_id
+                LEFT JOIN accounts  a ON a.id=c.seeker_account_id
                 LEFT JOIN job_listings l ON l.id=c.listing_id
                 WHERE c.employer_account_id=:me_w
                 ORDER BY c.last_message_at IS NULL, c.last_message_at DESC";

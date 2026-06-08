@@ -490,7 +490,40 @@
   color: #fefcff;
 }
 
-/* Footer holds just the posted time (left) and the contact button (right). */
+/* "Mesaj at" — same pill as İletişim, filled to read as the primary action. */
+.ep-feed-msg {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fefcff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+.ep-feed-msg:hover {
+  transform: translateY(-1px);
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+}
+
+/* Right-aligned action group (Mesaj at + İletişim). */
+.ep-feed-foot-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.ep-feed-foot-actions .ep-feed-contact,
+.ep-feed-foot-actions .ep-feed-msg { margin-left: 0; }
+
+/* Footer holds just the posted time (left) and the action group (right). */
 .ep-feed-card .ep-feed-posted { margin-left: 0; }
 .ep-feed-card .ep-feed-contact { margin-left: auto; }
 

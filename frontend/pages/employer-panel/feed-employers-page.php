@@ -139,7 +139,7 @@ try {
     }
 
     $sql =
-        "SELECT e.id, e.company_name, e.sector, e.company_size, e.is_iso500,
+        "SELECT e.id, e.account_id, e.company_name, e.sector, e.company_size, e.is_iso500,
                 e.city, e.about, e.website, e.linkedin, e.founded_year, e.created_at,
                 (SELECT COUNT(*) FROM job_listings jl WHERE jl.employer_id = e.id AND jl.is_active = 1) AS active_listings
            FROM employers e
@@ -300,6 +300,7 @@ $sortLabels = [
             $cLink  = trim((string) ($co['linkedin'] ?? ''));
             $cYear  = trim((string) ($co['founded_year'] ?? ''));
             $cActive = (int) ($co['active_listings'] ?? 0);
+            $cAccId  = (int) ($co['account_id'] ?? 0);
             $subLine = $cSec !== '' && $cCity !== '' ? $cSec . ' · ' . $cCity : ($cSec ?: $cCity);
             $excerpt = $cAbout !== '' ? mb_substr($cAbout, 0, 150, 'UTF-8') . (mb_strlen($cAbout, 'UTF-8') > 150 ? '…' : '') : '';
           ?>
@@ -328,15 +329,25 @@ $sortLabels = [
             <?php endif; ?>
 
             <footer class="ep-poster-foot">
-              <?php if ($cActive > 0): ?>
-                <a class="ep-feed-contact" href="/akis.php?q=<?= rawurlencode($cName) ?>">İlanları gör</a>
-              <?php endif; ?>
               <?php if ($cWeb !== ''): ?>
                 <a class="ep-feed-lang" href="<?= $h(preg_match('~^https?://~i', $cWeb) ? $cWeb : 'https://' . $cWeb) ?>" target="_blank" rel="noopener noreferrer nofollow">Web sitesi</a>
               <?php endif; ?>
               <?php if ($cLink !== ''): ?>
                 <a class="ep-feed-lang" href="<?= $h(preg_match('~^https?://~i', $cLink) ? $cLink : 'https://' . $cLink) ?>" target="_blank" rel="noopener noreferrer nofollow">LinkedIn</a>
               <?php endif; ?>
+              <span class="ep-feed-foot-actions">
+                <?php if ($cAccId > 0 && $cAccId !== $employerId): ?>
+                  <a class="ep-feed-msg" href="/mesaj-baslat.php?account=<?= $cAccId ?>">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 5h16v11H8l-4 3V5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                    </svg>
+                    Mesaj at
+                  </a>
+                <?php endif; ?>
+                <?php if ($cActive > 0): ?>
+                  <a class="ep-feed-contact" href="/akis.php?q=<?= rawurlencode($cName) ?>">İlanları gör</a>
+                <?php endif; ?>
+              </span>
             </footer>
           </article>
           <?php endforeach; ?>

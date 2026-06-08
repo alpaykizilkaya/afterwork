@@ -71,6 +71,10 @@ switch ($route) {
         require $PAGES . '/shared/notifications-action.php';
         break;
 
+    case 'mesaj-baslat.php':
+        require $PAGES . '/shared/start-conversation.php';
+        break;
+
     case 'isveren-panel.php':
         require $PAGES . '/employer-panel/dashboard-page.php';
         break;

@@ -52,7 +52,7 @@ try {
     }
 
     $sql =
-        "SELECT s.id, s.full_name, s.created_at
+        "SELECT s.id, s.account_id, s.full_name, s.created_at
            FROM seekers s
           WHERE " . implode(' AND ', $where) . "
           ORDER BY {$sortMap[$sort]}
@@ -186,8 +186,9 @@ $sortLabels = [
       <?php if ($resultCount > 0): ?>
         <div class="ep-dukkan-grid ep-feed-grid">
           <?php foreach ($seekers as $sk):
-            $sName = (string) ($sk['full_name'] ?? '');
-            $ago   = $feedTimeAgo((string) ($sk['created_at'] ?? ''));
+            $sName  = (string) ($sk['full_name'] ?? '');
+            $ago    = $feedTimeAgo((string) ($sk['created_at'] ?? ''));
+            $sAccId = (int) ($sk['account_id'] ?? 0);
           ?>
           <article class="ep-poster-card ep-feed-card">
             <div class="ep-feed-company">
@@ -199,6 +200,18 @@ $sortLabels = [
                 <?php endif; ?>
               </span>
             </div>
+            <?php if ($sAccId > 0): ?>
+              <footer class="ep-poster-foot">
+                <span class="ep-feed-foot-actions">
+                  <a class="ep-feed-msg" href="/mesaj-baslat.php?account=<?= $sAccId ?>">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 5h16v11H8l-4 3V5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                    </svg>
+                    Mesaj at
+                  </a>
+                </span>
+              </footer>
+            <?php endif; ?>
           </article>
           <?php endforeach; ?>
         </div>
