@@ -71,12 +71,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   notif.querySelectorAll('.ep-notif-item').forEach((item) => {
     item.addEventListener('click', () => {
-      if (!item.classList.contains('is-unread')) return;
+      const url = item.getAttribute('data-notif-url');
+      const wasUnread = item.classList.contains('is-unread');
       const id = item.getAttribute('data-notif-id');
-      item.classList.remove('is-unread'); // optimistic
-      post('action=read&id=' + encodeURIComponent(id)).then((res) => {
-        if (res && res.ok) applyUnread(res.unread);
-      });
+      if (wasUnread) {
+        item.classList.remove('is-unread'); // optimistic
+        post('action=read&id=' + encodeURIComponent(id)).then((res) => {
+          if (res && res.ok) applyUnread(res.unread);
+          if (url) window.location.href = url;
+        });
+      } else if (url) {
+        window.location.href = url;
+      }
     });
   });
 

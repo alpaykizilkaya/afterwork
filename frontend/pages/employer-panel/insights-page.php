@@ -108,6 +108,8 @@ for ($d = 0; $d < 7; $d++) { $hourly[$d] = array_fill(0, 24, 0); }
 
 $trafficBreakdown = [];   // traffic_source => count
 $deviceBreakdown = [];    // device_type => count
+$geoCountries = [];       // ISO-2 country code => count
+$geoCities = [];          // ISO-2 country code => [city => count]
 
 try {
     $pdo = db();
@@ -185,6 +187,39 @@ try {
     foreach ($stmt->fetchAll() as $row) {
         $deviceBreakdown[(string) $row['d']] = (int) $row['c'];
     }
+
+    // Geo breakdown (real, from derived country/city on each view). Wrapped on
+    // its own so a pre-migration DB (no geo columns) leaves geo empty without
+    // wiping the breakdowns above.
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT country_code AS cc, COUNT(*) AS c
+             FROM listing_views
+             WHERE listing_id = :id AND country_code IS NOT NULL AND country_code <> ""
+             GROUP BY country_code ORDER BY c DESC'
+        );
+        $stmt->execute(['id' => $listingId]);
+        foreach ($stmt->fetchAll() as $row) {
+            $geoCountries[(string) $row['cc']] = (int) $row['c'];
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT country_code AS cc, city, COUNT(*) AS c
+             FROM listing_views
+             WHERE listing_id = :id AND country_code IS NOT NULL AND country_code <> ""
+               AND city IS NOT NULL AND city <> ""
+             GROUP BY country_code, city ORDER BY c DESC'
+        );
+        $stmt->execute(['id' => $listingId]);
+        foreach ($stmt->fetchAll() as $row) {
+            $cc = (string) $row['cc'];
+            $geoCities[$cc] ??= [];
+            $geoCities[$cc][(string) $row['city']] = (int) $row['c'];
+        }
+    } catch (Throwable) {
+        $geoCountries = [];
+        $geoCities = [];
+    }
 } catch (Throwable) {
     // Analytics tables not migrated yet — everything stays 0/empty, page will show empty states.
 }
@@ -247,6 +282,7 @@ $hasApps    = $totalApplications > 0;
 $hasSaves   = $totalSaves > 0;
 $hasTraffic = array_sum($trafficBreakdown) > 0;
 $hasDevice  = array_sum($deviceBreakdown) > 0;
+$hasGeo     = array_sum($geoCountries) > 0;
 
 // Listing quality score — computed from listing content, no external data needed
 $qualityScore = 0;
@@ -469,7 +505,7 @@ if ($lMin !== null && $lMax !== null) {
         <div class="in-card in-card--map">
           <div class="in-map-head">
             <p class="in-card-kicker">Dünya başvuru ısı haritası</p>
-            <?php if ($hasViews || $isDemo): ?>
+            <?php if ($hasGeo || $isDemo): ?>
               <button type="button" id="map-reset" class="in-map-reset" hidden>
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                   <path d="M3 6l3-3M3 6l3 3M3 6h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -478,7 +514,7 @@ if ($lMin !== null && $lMax !== null) {
               </button>
             <?php endif; ?>
           </div>
-          <?php if ($hasViews || $isDemo): ?>
+          <?php if ($hasGeo || $isDemo): ?>
             <div id="tr-map" class="in-map" aria-label="Dünya başvuru haritası">
               <div class="in-map-loader" id="map-loader" hidden>Şehirler yükleniyor…</div>
             </div>
@@ -718,6 +754,9 @@ if ($lMin !== null && $lMax !== null) {
       hourly:           <?= json_encode($hourly) ?>,
       trafficBreakdown: <?= json_encode($trafficBreakdown, JSON_UNESCAPED_UNICODE) ?>,
       deviceBreakdown:  <?= json_encode($deviceBreakdown, JSON_UNESCAPED_UNICODE) ?>,
+      geoCountries:     <?= json_encode((object) $geoCountries, JSON_UNESCAPED_UNICODE) ?>,
+      geoCities:        <?= json_encode((object) $geoCities, JSON_UNESCAPED_UNICODE) ?>,
+      demo:             <?= $isDemo ? 'true' : 'false' ?>,
     };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>

@@ -37,12 +37,16 @@ try {
     $pdo = db();
     $in  = implode(',', array_fill(0, count($aud), '?'));
 
+    // Visibility rule (mirrors the topbar): targeted at me, OR a broadcast for
+    // a matching audience role.
+    $visible = "(n.account_id = ? OR (n.account_id IS NULL AND n.audience IN ({$in})))";
+
     if ($action === 'read') {
         $id = (int) ($_POST['id'] ?? 0);
         if ($id > 0) {
             // Only allow marking notifications this account is actually allowed to see.
-            $chk = $pdo->prepare("SELECT 1 FROM notifications WHERE id = ? AND audience IN ({$in}) LIMIT 1");
-            $chk->execute(array_merge([$id], $aud));
+            $chk = $pdo->prepare("SELECT 1 FROM notifications n WHERE n.id = ? AND {$visible} LIMIT 1");
+            $chk->execute(array_merge([$id, $acc], $aud));
             if ($chk->fetchColumn()) {
                 $ins = $pdo->prepare(
                     'INSERT INTO notification_reads (notification_id, account_id)
@@ -56,9 +60,9 @@ try {
         $ins = $pdo->prepare(
             "INSERT IGNORE INTO notification_reads (notification_id, account_id)
              SELECT n.id, ? FROM notifications n
-              WHERE n.audience IN ({$in})"
+              WHERE {$visible}"
         );
-        $ins->execute(array_merge([$acc], $aud));
+        $ins->execute(array_merge([$acc, $acc], $aud));
     } else {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'unknown_action']);
@@ -69,9 +73,9 @@ try {
     $cnt = $pdo->prepare(
         "SELECT COUNT(*) FROM notifications n
            LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.account_id = ?
-          WHERE n.audience IN ({$in}) AND r.account_id IS NULL"
+          WHERE {$visible} AND r.account_id IS NULL"
     );
-    $cnt->execute(array_merge([$acc], $aud));
+    $cnt->execute(array_merge([$acc, $acc], $aud));
     $unread = (int) $cnt->fetchColumn();
 
     echo json_encode(['ok' => true, 'unread' => $unread]);

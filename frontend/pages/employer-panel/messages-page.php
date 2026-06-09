@@ -21,6 +21,7 @@ if (
 
 require_once __DIR__ . '/../../../backend/config/db.php';
 require_once __DIR__ . '/../../../backend/auth/session-helper.php';
+require_once __DIR__ . '/../../../backend/notifications/notify.php';
 
 $employer    = is_array($_SESSION['employer'] ?? null) ? $_SESSION['employer'] : [];
 $companyName = trim((string) ($employer['company_name'] ?? '')) ?: 'Şirketiniz';
@@ -106,13 +107,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cid  = (int) ($_POST['conversation_id'] ?? 0);
     $body = trim((string) ($_POST['body'] ?? ''));
     if ($cid > 0 && $body !== '') {
-        $chk = $pdo->prepare('SELECT id FROM conversations WHERE id=:c AND (employer_account_id=:me1 OR seeker_account_id=:me2)');
+        $chk = $pdo->prepare('SELECT employer_account_id, seeker_account_id FROM conversations WHERE id=:c AND (employer_account_id=:me1 OR seeker_account_id=:me2)');
         $chk->execute(['c' => $cid, 'me1' => $me, 'me2' => $me]);
-        if ($chk->fetchColumn()) {
+        $conv = $chk->fetch();
+        if ($conv) {
+            $body = mb_substr($body, 0, 4000, 'UTF-8');
             $pdo->prepare('INSERT INTO messages (conversation_id, sender_account_id, body, created_at) VALUES (:c,:me,:b,NOW())')
-                ->execute(['c' => $cid, 'me' => $me, 'b' => mb_substr($body, 0, 4000, 'UTF-8')]);
+                ->execute(['c' => $cid, 'me' => $me, 'b' => $body]);
             $pdo->prepare('UPDATE conversations SET last_message_at=NOW(), last_sender_account_id=:me WHERE id=:c')
                 ->execute(['c' => $cid, 'me' => $me]);
+
+            // Notify the recipient (the other side of the thread) so the new
+            // message shows up in their topbar bell.
+            $recipient = (int) $conv['employer_account_id'] === $me
+                ? (int) $conv['seeker_account_id']
+                : (int) $conv['employer_account_id'];
+            $excerpt = mb_substr($body, 0, 90, 'UTF-8');
+            notify_account($pdo, $recipient, 'Yeni mesaj · ' . $companyName, $excerpt, '/mesajlar.php?c=' . $cid);
         }
     }
     header('Location: /mesajlar.php?side=' . $side . '&c=' . $cid . '#thread-bottom');

@@ -34,7 +34,7 @@ isn't a real file is funneled to it:
 | `/` , `/index.php` | `frontend/pages/home/home-page.php` (signed-in users redirect to their panel; `?home=1` previews home) |
 | `/akis.php` | `employer-panel/feed-page.php`, or `feed-detail-page.php` when `?id=<n>` |
 | `/mercek.php` | `employer-panel/insights-page.php` (per-listing analytics) |
-| `/mesajlar.php` | `employer-panel/messages-page.php` (**stub** — not built yet) |
+| `/mesajlar.php` | `employer-panel/messages-page.php` (two-sided inbox, built; sending a message notifies the recipient via `backend/notifications/notify.php`) |
 | `/isveren-panel.php` | `employer-panel/dashboard-page.php` (employer home + listing create/edit) |
 | `/seeker-panel.php` | `seeker-panel/dashboard-page.php` |
 | `/auth.php` | `auth/auth-page.php` (login + register) |

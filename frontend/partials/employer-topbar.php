@@ -65,17 +65,21 @@ if (function_exists('db')) {
             $notifRole = (string) ($_SESSION['account']['role'] ?? '');
             $notifAud  = $notifRole === 'seeker' ? ['all', 'seeker'] : ['all', 'employer'];
             $notifIn   = implode(',', array_fill(0, count($notifAud), '?'));
+            // A notification is visible if it's targeted at this exact account
+            // (account_id = me) OR it's a broadcast (account_id IS NULL) for a
+            // matching audience role.
             $st = db()->prepare(
-                "SELECT n.id, n.title, n.body, n.created_at,
+                "SELECT n.id, n.title, n.body, n.url, n.created_at,
                         (r.account_id IS NOT NULL) AS is_read
                    FROM notifications n
                    LEFT JOIN notification_reads r
                      ON r.notification_id = n.id AND r.account_id = ?
-                  WHERE n.audience IN ({$notifIn})
+                  WHERE n.account_id = ?
+                     OR (n.account_id IS NULL AND n.audience IN ({$notifIn}))
                   ORDER BY n.created_at DESC, n.id DESC
                   LIMIT 20"
             );
-            $st->execute(array_merge([$notifAcc], $notifAud));
+            $st->execute(array_merge([$notifAcc, $notifAcc], $notifAud));
             $notifications = $st->fetchAll();
             foreach ($notifications as $n) {
                 if ((int) $n['is_read'] === 0) {
@@ -159,7 +163,8 @@ $notifWhen = static function (string $ts): string {
             <div class="ep-notif-empty">Henüz bildirim yok.</div>
           <?php else: foreach ($notifications as $n):
             $nUnread = (int) ($n['is_read'] ?? 0) === 0; ?>
-            <button type="button" class="ep-notif-item<?= $nUnread ? ' is-unread' : '' ?>" data-notif-id="<?= (int) $n['id'] ?>">
+            <?php $nUrl = trim((string) ($n['url'] ?? '')); ?>
+            <button type="button" class="ep-notif-item<?= $nUnread ? ' is-unread' : '' ?>" data-notif-id="<?= (int) $n['id'] ?>"<?= $nUrl !== '' ? ' data-notif-url="' . htmlspecialchars($nUrl, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
               <span class="ep-notif-dot" aria-hidden="true"></span>
               <span class="ep-notif-main">
                 <span class="ep-notif-item-title"><?= htmlspecialchars((string) $n['title'], ENT_QUOTES, 'UTF-8') ?></span>

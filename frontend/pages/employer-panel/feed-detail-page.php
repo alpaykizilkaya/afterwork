@@ -100,11 +100,20 @@ try {
                 $device = 'Mobil';
             }
 
-            $pdo->prepare(
-                'INSERT INTO listing_views
-                    (listing_id, viewer_account_id, viewer_session_hash, referrer, traffic_source, device_type, user_agent)
-                 VALUES (:id, :acc, :sh, :ref, :src, :dev, :ua)'
-            )->execute([
+            // Coarse geolocation from the visitor IP (country/city only, never the
+            // raw IP). Best-effort — a slow/failed lookup must not block the view.
+            require_once __DIR__ . '/../../../backend/geo/ip-geo.php';
+            $clientIp = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+            if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+                $fwd = explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR']);
+                $cand = trim($fwd[0]);
+                if (filter_var($cand, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    $clientIp = $cand;
+                }
+            }
+            $geo = geo_from_ip($clientIp);
+
+            $base = [
                 'id'  => $viewId,
                 'acc' => $viewerAccountId > 0 ? $viewerAccountId : null,
                 'sh'  => $sessionHash,
@@ -112,7 +121,26 @@ try {
                 'src' => $source,
                 'dev' => $device,
                 'ua'  => $ua !== '' ? mb_substr($ua, 0, 512) : null,
-            ]);
+            ];
+            try {
+                $pdo->prepare(
+                    'INSERT INTO listing_views
+                        (listing_id, viewer_account_id, viewer_session_hash, referrer, traffic_source, device_type, user_agent, country_code, country, city)
+                     VALUES (:id, :acc, :sh, :ref, :src, :dev, :ua, :cc, :co, :ci)'
+                )->execute($base + [
+                    'cc' => ($geo['country_code'] ?? '') !== '' ? $geo['country_code'] : null,
+                    'co' => ($geo['country'] ?? '') !== '' ? $geo['country'] : null,
+                    'ci' => ($geo['city'] ?? '') !== '' ? $geo['city'] : null,
+                ]);
+            } catch (Throwable) {
+                // Geo columns not migrated yet — fall back to the original insert so
+                // view tracking keeps working until the migration is applied.
+                $pdo->prepare(
+                    'INSERT INTO listing_views
+                        (listing_id, viewer_account_id, viewer_session_hash, referrer, traffic_source, device_type, user_agent)
+                     VALUES (:id, :acc, :sh, :ref, :src, :dev, :ua)'
+                )->execute($base);
+            }
         }
     }
 } catch (Throwable) {
