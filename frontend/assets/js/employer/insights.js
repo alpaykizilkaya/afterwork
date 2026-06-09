@@ -245,6 +245,19 @@
       }
     }
 
+    // Applicant-only pies (REAL, from listing_applications) — shown next to the
+    // viewer pies so the employer can compare "browsers" vs "people who applied".
+    const donutFromMap = (id, map) => {
+      if (!$(id)) return;
+      const labels = Object.keys(map || {});
+      const data = labels.map((k) => map[k]);
+      if (labels.length) {
+        new Chart($(id), makeDonutConfig({ labels, data, colors: cycleColors(labels.length) }));
+      }
+    };
+    donutFromMap('chart-source-app', d.appTrafficBreakdown);
+    donutFromMap('chart-device-app', d.appDeviceBreakdown);
+
     if ($('chart-trend')) {
       const trendLabels = [];
       const trendData = [];

@@ -110,6 +110,8 @@ $trafficBreakdown = [];   // traffic_source => count
 $deviceBreakdown = [];    // device_type => count
 $geoCountries = [];       // ISO-2 country code => count
 $geoCities = [];          // ISO-2 country code => [city => count]
+$appTrafficBreakdown = []; // traffic_source => count, but for APPLICANTS only
+$appDeviceBreakdown  = []; // device_type => count, but for APPLICANTS only
 
 try {
     $pdo = db();
@@ -220,6 +222,31 @@ try {
         $geoCountries = [];
         $geoCities = [];
     }
+
+    // Applicant-only breakdowns (source + device) so Mercek can show a second pie
+    // next to the viewer pie. Own try block: pre-migration DBs (no columns on
+    // listing_applications) leave these empty without affecting anything above.
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT COALESCE(NULLIF(traffic_source, ""), "Bilinmiyor") AS s, COUNT(*) AS c
+             FROM listing_applications WHERE listing_id = :id GROUP BY s ORDER BY c DESC LIMIT 6'
+        );
+        $stmt->execute(['id' => $listingId]);
+        foreach ($stmt->fetchAll() as $row) {
+            $appTrafficBreakdown[(string) $row['s']] = (int) $row['c'];
+        }
+        $stmt = $pdo->prepare(
+            'SELECT COALESCE(NULLIF(device_type, ""), "Bilinmiyor") AS d, COUNT(*) AS c
+             FROM listing_applications WHERE listing_id = :id GROUP BY d ORDER BY c DESC'
+        );
+        $stmt->execute(['id' => $listingId]);
+        foreach ($stmt->fetchAll() as $row) {
+            $appDeviceBreakdown[(string) $row['d']] = (int) $row['c'];
+        }
+    } catch (Throwable) {
+        $appTrafficBreakdown = [];
+        $appDeviceBreakdown = [];
+    }
 } catch (Throwable) {
     // Analytics tables not migrated yet — everything stays 0/empty, page will show empty states.
 }
@@ -264,6 +291,9 @@ if ($isDemo) {
 
     $trafficBreakdown = ['Arama' => 42, 'Ana sayfa' => 26, 'Profil' => 14, 'Direkt' => 12, 'Paylaşım' => 6];
     $deviceBreakdown  = ['Mobil' => 58, 'Masaüstü' => 38, 'Tablet' => 4];
+    // Applicants skew differently from browsers — fewer, more deliberate.
+    $appTrafficBreakdown = ['Arama' => 16, 'Profil' => 11, 'Ana sayfa' => 6, 'Direkt' => 4];
+    $appDeviceBreakdown  = ['Masaüstü' => 24, 'Mobil' => 11, 'Tablet' => 2];
 
     $fmtNum = static fn (int $n): string => number_format($n, 0, ',', '.');
     $kpis = [
@@ -283,6 +313,8 @@ $hasSaves   = $totalSaves > 0;
 $hasTraffic = array_sum($trafficBreakdown) > 0;
 $hasDevice  = array_sum($deviceBreakdown) > 0;
 $hasGeo     = array_sum($geoCountries) > 0;
+$hasAppTraffic = array_sum($appTrafficBreakdown) > 0;
+$hasAppDevice  = array_sum($appDeviceBreakdown) > 0;
 
 // Listing quality score — computed from listing content, no external data needed
 $qualityScore = 0;
@@ -554,17 +586,31 @@ if ($lMin !== null && $lMax !== null) {
       <!-- F — Trafik -->
       <section class="in-section">
         <h2 class="in-section-title">Trafik Kaynağı</h2>
-        <div class="in-grid in-grid--3">
+
+        <!-- Nereden geldi: göz atanlar vs başvuranlar -->
+        <div class="in-grid in-grid--2">
           <div class="in-card">
-            <p class="in-card-kicker">Nereden geldi</p>
+            <p class="in-card-kicker">Nereden geldi · Göz atanlar</p>
             <?php if ($hasTraffic): ?>
               <div class="in-chart in-chart--donut"><canvas id="chart-source"></canvas></div>
             <?php else: ?>
-              <div class="in-empty">Referrer kaydı birikince burada pie grafiği çıkacak.</div>
+              <div class="in-empty">İlanı görüntüleyenler biriktikçe burada pie grafiği çıkacak.</div>
             <?php endif; ?>
           </div>
           <div class="in-card">
-            <p class="in-card-kicker">Cihaz</p>
+            <p class="in-card-kicker">Nereden geldi · Başvuranlar</p>
+            <?php if ($hasAppTraffic): ?>
+              <div class="in-chart in-chart--donut"><canvas id="chart-source-app"></canvas></div>
+            <?php else: ?>
+              <div class="in-empty">Başvuru geldikçe, başvuranların ilana en son nereden geldiği burada.</div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- Cihaz: göz atanlar vs başvuranlar -->
+        <div class="in-grid in-grid--2" style="margin-top:1rem;">
+          <div class="in-card">
+            <p class="in-card-kicker">Cihaz · Göz atanlar</p>
             <?php if ($hasDevice): ?>
               <div class="in-chart in-chart--donut"><canvas id="chart-device"></canvas></div>
             <?php else: ?>
@@ -572,14 +618,21 @@ if ($lMin !== null && $lMax !== null) {
             <?php endif; ?>
           </div>
           <div class="in-card">
-            <p class="in-card-kicker">En çok aranan kelimeler</p>
-            <?php if ($isDemo): ?>
-              <div id="wordcloud" class="in-wordcloud-wrap" aria-label="Anahtar kelime bulutu"></div>
+            <p class="in-card-kicker">Cihaz · Başvuranlar</p>
+            <?php if ($hasAppDevice): ?>
+              <div class="in-chart in-chart--donut"><canvas id="chart-device-app"></canvas></div>
             <?php else: ?>
-              <div class="in-empty">Arama sorgu kaydı eklendiğinde kelime bulutu burada çizilecek.</div>
+              <div class="in-empty">Başvuranların hangi cihazdan başvurduğu burada görünecek.</div>
             <?php endif; ?>
           </div>
         </div>
+
+        <?php if ($isDemo): ?>
+          <div class="in-card" style="margin-top:1rem;">
+            <p class="in-card-kicker">En çok aranan kelimeler</p>
+            <div id="wordcloud" class="in-wordcloud-wrap" aria-label="Anahtar kelime bulutu"></div>
+          </div>
+        <?php endif; ?>
       </section>
 
       <!-- G — Rekabet · Piyasa -->
@@ -756,6 +809,8 @@ if ($lMin !== null && $lMax !== null) {
       deviceBreakdown:  <?= json_encode($deviceBreakdown, JSON_UNESCAPED_UNICODE) ?>,
       geoCountries:     <?= json_encode((object) $geoCountries, JSON_UNESCAPED_UNICODE) ?>,
       geoCities:        <?= json_encode((object) $geoCities, JSON_UNESCAPED_UNICODE) ?>,
+      appTrafficBreakdown: <?= json_encode((object) $appTrafficBreakdown, JSON_UNESCAPED_UNICODE) ?>,
+      appDeviceBreakdown:  <?= json_encode((object) $appDeviceBreakdown, JSON_UNESCAPED_UNICODE) ?>,
       demo:             <?= $isDemo ? 'true' : 'false' ?>,
     };
   </script>
