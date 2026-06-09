@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 session_start();
 
-// DEV BYPASS — localhost only, remove before pushing to production
-if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
+// DEV BYPASS — localhost only, remove before pushing to production.
+// Mesajlar is shared by employers AND seekers, so we must NOT override an
+// existing session — a seeker arriving from their panel has to stay a seeker.
+// Only seed a default employer session when nobody is signed in yet.
+if (
+    in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)
+    && !isset($_SESSION['account'])
+) {
     $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
     $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
 }

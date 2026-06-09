@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 session_start();
 
-// DEV BYPASS — localhost only, remove before pushing to production
+// DEV BYPASS — localhost only, remove before pushing to production.
+// Points at a real local seeker account (aday@local.test, completed profile) so
+// the dashboard renders with data on localhost. Flip its seekers.profile_completed
+// to 0 to preview the onboarding wizard instead.
 if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
-    $_SESSION['account'] = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'seeker', 'is_verified' => 1];
-    $_SESSION['seeker']  = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'full_name' => 'Dev Kullanıcı', 'role' => 'seeker'];
+    $_SESSION['account'] = ['account_id' => 27, 'email' => 'aday@local.test', 'role' => 'seeker', 'is_verified' => 1];
+    $_SESSION['seeker']  = ['id' => 0, 'account_id' => 27, 'email' => 'aday@local.test', 'full_name' => 'Deniz Yıldız', 'role' => 'seeker'];
 }
 
 if (
@@ -138,6 +141,7 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AFTERWORK | <?= $completed ? 'Profilim' : 'Profilini oluştur' ?></title>
+  <link rel="stylesheet" href="/frontend/assets/css/employer/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/panel.css') ?>">
   <link rel="stylesheet" href="/frontend/assets/css/seeker/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/seeker/panel.css') ?>">
   <link rel="stylesheet" href="/frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
   <link rel="stylesheet" href="/frontend/assets/css/shared/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/verify-banner.css') ?>">
@@ -146,17 +150,19 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'
 <!-- ░░ ONBOARDING ░░ : blurred panel behind, 4-step wizard on top ░░ -->
 <body class="sk-ob-body">
   <div class="sk-ob-bg" aria-hidden="true">
-    <div class="sk-page">
-      <?php $activeTab = 'profile'; include __DIR__ . '/../../partials/seeker-topbar.php'; ?>
-      <section class="sk-hero">
-        <p class="sk-kicker">Profilim</p>
-        <h1>Hoş geldin, <?= $h($fullName) ?>.</h1>
-        <p class="sk-lead">Profilin tamamlandığında ilanlar, başvurular ve mesajlar burada olacak.</p>
-      </section>
-      <div class="sk-grid">
-        <div class="sk-card sk-skel"></div>
-        <div class="sk-card sk-skel"></div>
-        <div class="sk-card sk-skel sk-skel--wide"></div>
+    <div class="ep-page">
+      <?php $activeTab = 'profile'; include __DIR__ . '/../../partials/employer-topbar.php'; ?>
+      <div class="sk-wrap">
+        <section class="sk-hero">
+          <p class="sk-kicker">Profilim</p>
+          <h1>Hoş geldin, <?= $h($fullName) ?>.</h1>
+          <p class="sk-about">Profilin tamamlandığında özetin, becerilerin ve mesajların burada olacak.</p>
+        </section>
+        <div class="sk-grid">
+          <div class="sk-skel"></div>
+          <div class="sk-skel"></div>
+          <div class="sk-skel sk-skel--wide"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -261,9 +267,10 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'
 
 <?php else: ?>
 <!-- ░░ PROFILIM (completed) ░░ -->
-<body class="sk-body">
-  <div class="sk-page">
-    <?php $activeTab = 'profile'; include __DIR__ . '/../../partials/seeker-topbar.php'; ?>
+<body>
+  <div class="ep-page">
+    <?php $activeTab = 'profile'; include __DIR__ . '/../../partials/employer-topbar.php'; ?>
+    <div class="sk-wrap">
 
     <?php if (!$isVerified): ?>
     <div class="verify-banner" role="region" aria-label="E-posta doğrulama">
@@ -380,9 +387,11 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'
         </article>
       </div>
     <?php endif; ?>
+    </div>
   </div>
 
   <?php include __DIR__ . '/_logout-modal.php'; ?>
+  <script src="/frontend/assets/js/employer/topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/topbar.js') ?>" defer></script>
   <script src="/frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
 </body>
 <?php endif; ?>
