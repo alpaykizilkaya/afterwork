@@ -10,10 +10,11 @@ if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0
     $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
 }
 
+// Mesajlar is shared: both employers and seekers use the same two-pane view.
 if (
     !isset($_SESSION['account'])
     || !is_array($_SESSION['account'])
-    || (string) ($_SESSION['account']['role'] ?? '') !== 'employer'
+    || !in_array((string) ($_SESSION['account']['role'] ?? ''), ['employer', 'seeker'], true)
 ) {
     header('Location: /auth.php#giris');
     exit;

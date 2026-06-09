@@ -11,8 +11,18 @@ declare(strict_types=1);
  */
 
 $activeTab ??= 'account';
-$companyName ??= 'Şirket';
 $searchQuery ??= (string) ($_GET['q'] ?? '');
+
+// Role-aware: this topbar serves the employer panel AND the shared Mesajlar
+// page, which seekers also use. For a seeker we swap the tabs/labels and drop
+// the employer-only bits (search, "Yeni İlan").
+$awRole = (string) ($_SESSION['account']['role'] ?? 'employer');
+$isSeekerBar = $awRole === 'seeker';
+if ($isSeekerBar) {
+    $companyName = trim((string) ($_SESSION['seeker']['full_name'] ?? '')) ?: 'Aday';
+} else {
+    $companyName = trim((string) ($companyName ?? '')) ?: trim((string) ($_SESSION['employer']['company_name'] ?? '')) ?: 'Şirket';
+}
 
 $words = preg_split('/\s+/u', trim($companyName), -1, PREG_SPLIT_NO_EMPTY) ?: ['?'];
 $first = mb_substr((string) ($words[0] ?? '?'), 0, 1, 'UTF-8');
@@ -22,11 +32,16 @@ if ($companyInitials === '') {
     $companyInitials = '?';
 }
 
-$tabs = [
-    'account'  => ['label' => 'Dükkan',   'href' => '/isveren-panel.php'],
-    'feed'     => ['label' => 'Akış',     'href' => '/akis.php'],
-    'messages' => ['label' => 'Mesajlar', 'href' => '/mesajlar.php'],
-];
+$tabs = $isSeekerBar
+    ? [
+        'profile'  => ['label' => 'Profilim', 'href' => '/seeker-panel.php'],
+        'messages' => ['label' => 'Mesajlar', 'href' => '/mesajlar.php'],
+    ]
+    : [
+        'account'  => ['label' => 'Dükkan',   'href' => '/isveren-panel.php'],
+        'feed'     => ['label' => 'Akış',     'href' => '/akis.php'],
+        'messages' => ['label' => 'Mesajlar', 'href' => '/mesajlar.php'],
+    ];
 
 // Unread message count for the badge on the bell + Mesajlar tab. The messages
 // page computes this itself ($unreadMessages); other panel pages let the topbar
@@ -107,7 +122,7 @@ $notifWhen = static function (string $ts): string {
 };
 ?>
 <header class="ep-topbar" role="banner">
-  <a class="ep-brand" href="/isveren-panel.php" aria-label="Dükkana dön">
+  <a class="ep-brand" href="<?= $isSeekerBar ? '/seeker-panel.php' : '/isveren-panel.php' ?>" aria-label="Ana sayfa">
     <img src="/frontend/assets/images/afterwork-logo.png" alt="Afterwork">
   </a>
 
@@ -121,6 +136,7 @@ $notifWhen = static function (string $ts): string {
     <?php endforeach; ?>
   </nav>
 
+  <?php if (!$isSeekerBar): ?>
   <form class="ep-search" action="/isveren-panel.php" method="get" role="search">
     <svg class="ep-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/>
@@ -135,14 +151,17 @@ $notifWhen = static function (string $ts): string {
       aria-label="Ara"
     >
   </form>
+  <?php endif; ?>
 
   <div class="ep-top-actions">
+    <?php if (!$isSeekerBar): ?>
     <a class="ep-cta" href="/isveren-panel.php?yeni=1">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
       <span>Yeni İlan</span>
     </a>
+    <?php endif; ?>
 
     <div class="ep-notif ep-avatar-menu" data-ep-menu>
       <button type="button" class="ep-icon-btn ep-bell" data-ep-menu-trigger aria-haspopup="true" aria-expanded="false" aria-label="Bildirimler" title="Bildirimler">
@@ -192,7 +211,7 @@ $notifWhen = static function (string $ts): string {
           <p class="ep-menu-name"><?= htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8') ?></p>
           <p class="ep-menu-email"><?= htmlspecialchars((string) ($_SESSION['account']['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
         </div>
-        <a class="ep-menu-item" role="menuitem" href="/isveren-panel.php?profil=1">Şirket Profili</a>
+        <a class="ep-menu-item" role="menuitem" href="<?= $isSeekerBar ? '/seeker-panel.php' : '/isveren-panel.php?profil=1' ?>"><?= $isSeekerBar ? 'Profilim' : 'Şirket Profili' ?></a>
         <a class="ep-menu-item" role="menuitem" href="#" aria-disabled="true" title="Yakında">Ayarlar</a>
         <button type="button" class="ep-menu-item ep-menu-item--danger" role="menuitem" data-logout-trigger>Çıkış Yap</button>
       </div>
