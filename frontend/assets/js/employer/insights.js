@@ -221,17 +221,29 @@
       horizontal: true,
     }));
 
-    if ($('chart-source')) new Chart($('chart-source'), makeDonutConfig({
-      labels: ['Arama', 'Ana sayfa', 'Profil', 'Direkt', 'Paylaşım'],
-      data: [42, 26, 14, 12, 6],
-      colors: [palette.navy, palette.gold, palette.navySoft, palette.goldDeep, '#9ba8ab'],
-    }));
+    // Donut colour pool — cycled so any number of real slices gets a colour.
+    const donutPool = [palette.navy, palette.gold, palette.navySoft, palette.goldDeep, '#9ba8ab', '#c5c8c4', palette.green, palette.red];
+    const cycleColors = (n) => Array.from({ length: n }, (_, i) => donutPool[i % donutPool.length]);
 
-    if ($('chart-device')) new Chart($('chart-device'), makeDonutConfig({
-      labels: ['Mobil', 'Masaüstü', 'Tablet'],
-      data: [58, 38, 4],
-      colors: [palette.navy, palette.gold, palette.navySoft],
-    }));
+    // "Nereden geldi" — REAL traffic_source breakdown from the DB (no mock data).
+    if ($('chart-source')) {
+      const tb = d.trafficBreakdown || {};
+      const labels = Object.keys(tb);
+      const data = labels.map((k) => tb[k]);
+      if (labels.length) {
+        new Chart($('chart-source'), makeDonutConfig({ labels, data, colors: cycleColors(labels.length) }));
+      }
+    }
+
+    // "Cihaz" — REAL device_type breakdown from the DB (no mock data).
+    if ($('chart-device')) {
+      const db = d.deviceBreakdown || {};
+      const labels = Object.keys(db);
+      const data = labels.map((k) => db[k]);
+      if (labels.length) {
+        new Chart($('chart-device'), makeDonutConfig({ labels, data, colors: cycleColors(labels.length) }));
+      }
+    }
 
     if ($('chart-trend')) {
       const trendLabels = [];
@@ -255,20 +267,15 @@
     // Hourly heatmap (Chart.js matrix plugin)
     if ($('chart-hourly')) {
       const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-      const hours = Array.from({ length: 24 }, (_, h) => h);
       const data = [];
       let maxV = 0;
-      for (let d = 0; d < 7; d++) {
+      // REAL hourly heatmap from the DB: d.hourly[dayOfWeek 0=Mon..6=Sun][hour 0..23] = count.
+      const hourly = d.hourly || [];
+      for (let dd = 0; dd < 7; dd++) {
         for (let h = 0; h < 24; h++) {
-          // Mock: workdays (Mon–Fri 09–19) peak, weekends quieter
-          const workday = d < 5;
-          const workHour = h >= 9 && h <= 19;
-          let base = 2;
-          if (workday && workHour) base = 18 + Math.round(10 * Math.sin((h - 10) / 3));
-          else if (!workday && h >= 11 && h <= 22) base = 9 + Math.round(4 * Math.sin((h - 14) / 4));
-          const v = Math.max(0, base + Math.round((Math.random() - 0.5) * 6));
+          const v = (hourly[dd] && hourly[dd][h]) ? hourly[dd][h] : 0;
           if (v > maxV) maxV = v;
-          data.push({ x: h, y: d, v });
+          data.push({ x: h, y: dd, v });
         }
       }
 
@@ -359,44 +366,81 @@
     initWordcloud();
   }
 
+  // Full ISO 3166-1 alpha-2 → alpha-3 (the world GeoJSON keys countries on alpha-3,
+  // but ip-api gives us alpha-2). Used to colour the map from real geo data.
+  const A2_A3 = {
+    AD:'AND',AE:'ARE',AF:'AFG',AG:'ATG',AI:'AIA',AL:'ALB',AM:'ARM',AO:'AGO',AR:'ARG',AS:'ASM',
+    AT:'AUT',AU:'AUS',AW:'ABW',AX:'ALA',AZ:'AZE',BA:'BIH',BB:'BRB',BD:'BGD',BE:'BEL',BF:'BFA',
+    BG:'BGR',BH:'BHR',BI:'BDI',BJ:'BEN',BL:'BLM',BM:'BMU',BN:'BRN',BO:'BOL',BQ:'BES',BR:'BRA',
+    BS:'BHS',BT:'BTN',BV:'BVT',BW:'BWA',BY:'BLR',BZ:'BLZ',CA:'CAN',CC:'CCK',CD:'COD',CF:'CAF',
+    CG:'COG',CH:'CHE',CI:'CIV',CK:'COK',CL:'CHL',CM:'CMR',CN:'CHN',CO:'COL',CR:'CRI',CU:'CUB',
+    CV:'CPV',CW:'CUW',CX:'CXR',CY:'CYP',CZ:'CZE',DE:'DEU',DJ:'DJI',DK:'DNK',DM:'DMA',DO:'DOM',
+    DZ:'DZA',EC:'ECU',EE:'EST',EG:'EGY',EH:'ESH',ER:'ERI',ES:'ESP',ET:'ETH',FI:'FIN',FJ:'FJI',
+    FK:'FLK',FM:'FSM',FO:'FRO',FR:'FRA',GA:'GAB',GB:'GBR',GD:'GRD',GE:'GEO',GF:'GUF',GG:'GGY',
+    GH:'GHA',GI:'GIB',GL:'GRL',GM:'GMB',GN:'GIN',GP:'GLP',GQ:'GNQ',GR:'GRC',GS:'SGS',GT:'GTM',
+    GU:'GUM',GW:'GNB',GY:'GUY',HK:'HKG',HM:'HMD',HN:'HND',HR:'HRV',HT:'HTI',HU:'HUN',ID:'IDN',
+    IE:'IRL',IL:'ISR',IM:'IMN',IN:'IND',IO:'IOT',IQ:'IRQ',IR:'IRN',IS:'ISL',IT:'ITA',JE:'JEY',
+    JM:'JAM',JO:'JOR',JP:'JPN',KE:'KEN',KG:'KGZ',KH:'KHM',KI:'KIR',KM:'COM',KN:'KNA',KP:'PRK',
+    KR:'KOR',KW:'KWT',KY:'CYM',KZ:'KAZ',LA:'LAO',LB:'LBN',LC:'LCA',LI:'LIE',LK:'LKA',LR:'LBR',
+    LS:'LSO',LT:'LTU',LU:'LUX',LV:'LVA',LY:'LBY',MA:'MAR',MC:'MCO',MD:'MDA',ME:'MNE',MF:'MAF',
+    MG:'MDG',MH:'MHL',MK:'MKD',ML:'MLI',MM:'MMR',MN:'MNG',MO:'MAC',MP:'MNP',MQ:'MTQ',MR:'MRT',
+    MS:'MSR',MT:'MLT',MU:'MUS',MV:'MDV',MW:'MWI',MX:'MEX',MY:'MYS',MZ:'MOZ',NA:'NAM',NC:'NCL',
+    NE:'NER',NF:'NFK',NG:'NGA',NI:'NIC',NL:'NLD',NO:'NOR',NP:'NPL',NR:'NRU',NU:'NIU',NZ:'NZL',
+    OM:'OMN',PA:'PAN',PE:'PER',PF:'PYF',PG:'PNG',PH:'PHL',PK:'PAK',PL:'POL',PM:'SPM',PN:'PCN',
+    PR:'PRI',PS:'PSE',PT:'PRT',PW:'PLW',PY:'PRY',QA:'QAT',RE:'REU',RO:'ROU',RS:'SRB',RU:'RUS',
+    RW:'RWA',SA:'SAU',SB:'SLB',SC:'SYC',SD:'SDN',SE:'SWE',SG:'SGP',SH:'SHN',SI:'SVN',SJ:'SJM',
+    SK:'SVK',SL:'SLE',SM:'SMR',SN:'SEN',SO:'SOM',SR:'SUR',SS:'SSD',ST:'STP',SV:'SLV',SX:'SXM',
+    SY:'SYR',SZ:'SWZ',TC:'TCA',TD:'TCD',TF:'ATF',TG:'TGO',TH:'THA',TJ:'TJK',TK:'TKL',TL:'TLS',
+    TM:'TKM',TN:'TUN',TO:'TON',TR:'TUR',TT:'TTO',TV:'TUV',TW:'TWN',TZ:'TZA',UA:'UKR',UG:'UGA',
+    UM:'UMI',US:'USA',UY:'URY',UZ:'UZB',VA:'VAT',VC:'VCT',VE:'VEN',VG:'VGB',VI:'VIR',VN:'VNM',
+    VU:'VUT',WF:'WLF',WS:'WSM',YE:'YEM',YT:'MYT',ZA:'ZAF',ZM:'ZMB',ZW:'ZWE',
+  };
+
   function initMap() {
     const el = document.getElementById('tr-map');
     if (!el || typeof L === 'undefined') return;
 
-    // Mock country-level demand (ISO 3166-1 alpha-3) — replaced with real data once tracking lands.
-    const countryData = {
-      TUR: 72, GBR: 14, DEU: 9, NLD: 6, AZE: 6,
-      USA: 4, FRA: 4, BGR: 4, GRC: 3, IRN: 3, ARE: 5,
-      SAU: 4, QAT: 3, CYP: 2, RUS: 2, UKR: 2, POL: 3,
-      ESP: 2, ITA: 3, CHE: 2, AUT: 2, SWE: 2, DNK: 1,
-      NOR: 1, BEL: 2, CAN: 2, AUS: 2, IRL: 1, PRT: 1,
-      IND: 2, JPN: 1, KOR: 1, SGP: 1, BRA: 1, MEX: 1,
-    };
+    const d = window.__insightsData || {};
+    const demo = !!d.demo;
 
-    // ISO-3 → ISO-2 (for matching admin-1 features where Natural Earth uses iso_a2)
-    const iso3to2 = {
-      TUR:'TR', GBR:'GB', DEU:'DE', NLD:'NL', AZE:'AZ',
-      USA:'US', FRA:'FR', BGR:'BG', GRC:'GR', IRN:'IR',
-      ARE:'AE', SAU:'SA', QAT:'QA', CYP:'CY', RUS:'RU',
-      UKR:'UA', POL:'PL', ESP:'ES', ITA:'IT', CHE:'CH',
-      AUT:'AT', SWE:'SE', DNK:'DK', NOR:'NO', BEL:'BE',
-      CAN:'CA', AUS:'AU', IRL:'IE', PRT:'PT', IND:'IN',
-      JPN:'JP', KOR:'KR', SGP:'SG', BRA:'BR', MEX:'MX',
-    };
+    // alpha-3 → alpha-2 (for matching admin-1 features where Natural Earth uses iso_a2)
+    const iso3to2 = {};
+    Object.keys(A2_A3).forEach((a2) => { iso3to2[A2_A3[a2]] = a2; });
 
-    // Mock province-level data for Turkey (keys match province names in the GeoJSON source).
-    const provinceData = {
-      TUR: {
-        'Istanbul': 48, 'İstanbul': 48,
-        'Ankara': 18,
-        'Izmir': 11, 'İzmir': 11,
-        'Bursa': 6, 'Antalya': 5,
-        'Kocaeli': 4, 'Konya': 3, 'Adana': 2, 'Gaziantep': 2,
-        'Eskisehir': 1, 'Eskişehir': 1,
-        'Kayseri': 1, 'Samsun': 1, 'Mersin': 1, 'Trabzon': 1,
-        'Diyarbakir': 1, 'Diyarbakır': 1,
-      },
-    };
+    // countryData / provinceData are alpha-3 keyed (matching the world GeoJSON).
+    // Real mode: built from the DB-derived geo. Demo mode (localhost): mock data.
+    let countryData = {};
+    let provinceData = {};
+
+    if (demo) {
+      countryData = {
+        TUR: 72, GBR: 14, DEU: 9, NLD: 6, AZE: 6, USA: 4, FRA: 4, BGR: 4, GRC: 3, IRN: 3,
+        ARE: 5, SAU: 4, QAT: 3, CYP: 2, RUS: 2, UKR: 2, POL: 3, ESP: 2, ITA: 3, CHE: 2,
+        AUT: 2, SWE: 2, DNK: 1, NOR: 1, BEL: 2, CAN: 2, AUS: 2, IRL: 1, PRT: 1, IND: 2,
+        JPN: 1, KOR: 1, SGP: 1, BRA: 1, MEX: 1,
+      };
+      provinceData = {
+        TUR: {
+          'Istanbul': 48, 'İstanbul': 48, 'Ankara': 18, 'Izmir': 11, 'İzmir': 11,
+          'Bursa': 6, 'Antalya': 5, 'Kocaeli': 4, 'Konya': 3, 'Adana': 2, 'Gaziantep': 2,
+          'Eskisehir': 1, 'Eskişehir': 1, 'Kayseri': 1, 'Samsun': 1, 'Mersin': 1,
+          'Trabzon': 1, 'Diyarbakir': 1, 'Diyarbakır': 1,
+        },
+      };
+    } else {
+      // Real country counts (alpha-2 → alpha-3).
+      const gc = d.geoCountries || {};
+      Object.keys(gc).forEach((a2) => {
+        const a3 = A2_A3[String(a2).toUpperCase()];
+        if (a3) countryData[a3] = gc[a2];
+      });
+      // Real city counts, keyed by alpha-3 → { cityName: count }.
+      const gci = d.geoCities || {};
+      Object.keys(gci).forEach((a2) => {
+        const a3 = A2_A3[String(a2).toUpperCase()];
+        if (a3) provinceData[a3] = gci[a2];
+      });
+    }
 
     // Per-country admin-1 GeoJSON URLs — used in priority over the generic NE 50m file
     // for countries that NE 50m doesn't cover (Turkey, most of EU).
@@ -495,7 +539,7 @@
             const localName = p.name_tr || p.name_local || pn;
             const v = dataForCountry[pn] || 0;
             layer.bindTooltip(
-              `<span class="in-map-tt"><strong>${localName}</strong><br>${v ? v + '% başvuru' : 'veri toplanıyor'}</span>`,
+              `<span class="in-map-tt"><strong>${localName}</strong><br>${v ? v + ' görüntülenme' : 'veri toplanıyor'}</span>`,
               { direction: 'auto', sticky: true, opacity: 1, className: 'in-map-tooltip' }
             );
             layer.on('mouseover', (e) => {
@@ -519,7 +563,7 @@
           onEachFeature: (feat, layer) => {
             const v = countryData[iso3] || 0;
             layer.bindTooltip(
-              `<span class="in-map-tt"><strong>${countryName}</strong><br>${v ? v + '% başvuru' : 'veri toplanıyor'}</span>`,
+              `<span class="in-map-tt"><strong>${countryName}</strong><br>${v ? v + ' görüntülenme' : 'veri toplanıyor'}</span>`,
               { direction: 'auto', sticky: true, opacity: 1, className: 'in-map-tooltip' }
             );
           },
@@ -580,7 +624,7 @@
             const name = (feature.properties && feature.properties.name) || feature.id;
             const v = countryData[feature.id] || 0;
             layer.bindTooltip(
-              `<span class="in-map-tt"><strong>${name}</strong><br>${v ? v + '% başvuru' : 'başvuru yok'}</span>`,
+              `<span class="in-map-tt"><strong>${name}</strong><br>${v ? v + ' görüntülenme' : 'veri yok'}</span>`,
               { direction: 'auto', sticky: true, opacity: 1, className: 'in-map-tooltip' }
             );
             layer.on('mouseover', (e) => {

@@ -45,6 +45,7 @@ $showDashboard = $isNewMode || $isProfileMode || $isDetailMode || $_SERVER['REQU
 $showGrid = !$showDashboard;
 
 $listings = [];
+$listingStats = [];   // [listing_id => ['views' => int, 'apps' => int]] — same source as Mercek
 $editListing = null;
 
 // ── Helpers ────────────────────────────────────────────
@@ -82,6 +83,26 @@ if ($employerId > 0) {
             );
             $lst->execute(['id' => $employerId]);
             $listings = $lst->fetchAll();
+
+            // Per-listing real view & application counts — read from the exact same
+            // tables Mercek uses, so the card numbers always match the Mercek page.
+            // Best-effort & isolated: if the analytics tables aren't migrated yet,
+            // counts stay 0 but the listing grid still renders.
+            if ($listings !== []) {
+                $ids = array_map(static fn ($r) => (int) $r['id'], $listings);
+                $in  = implode(',', array_fill(0, count($ids), '?'));
+                foreach ($ids as $id) { $listingStats[$id] = ['views' => 0, 'apps' => 0]; }
+                try {
+                    $vq = $pdo->prepare("SELECT listing_id, COUNT(*) c FROM listing_views WHERE listing_id IN ($in) GROUP BY listing_id");
+                    $vq->execute($ids);
+                    foreach ($vq->fetchAll() as $r) { $listingStats[(int) $r['listing_id']]['views'] = (int) $r['c']; }
+                } catch (Throwable) { /* table not migrated — leave 0 */ }
+                try {
+                    $aq = $pdo->prepare("SELECT listing_id, COUNT(*) c FROM listing_applications WHERE listing_id IN ($in) GROUP BY listing_id");
+                    $aq->execute($ids);
+                    foreach ($aq->fetchAll() as $r) { $listingStats[(int) $r['listing_id']]['apps'] = (int) $r['c']; }
+                } catch (Throwable) { /* table not migrated — leave 0 */ }
+            }
         }
 
         if ($isDetailMode) {
@@ -832,9 +853,13 @@ $isEditing = $isDetailMode && $editListing !== null;
               <?php if ($lModel !== ''): ?><span class="ep-poster-chip"><?= htmlspecialchars($lModel, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
               <?php if ($lLocation !== ''): ?><span class="ep-poster-chip ep-poster-chip--ghost"><?= htmlspecialchars($lLocation, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
             </div>
+            <?php
+              $lApps  = (int) ($listingStats[$lId]['apps'] ?? 0);
+              $lViews = (int) ($listingStats[$lId]['views'] ?? 0);
+            ?>
             <footer class="ep-poster-foot">
-              <span><strong>0</strong> başvuru</span>
-              <span><strong>0</strong> görüntülenme</span>
+              <span><strong><?= number_format($lApps, 0, ',', '.') ?></strong> başvuru</span>
+              <span><strong><?= number_format($lViews, 0, ',', '.') ?></strong> görüntülenme</span>
               <?php if ($daysSince !== null): ?>
                 <span class="ep-poster-time">
                   <?php
