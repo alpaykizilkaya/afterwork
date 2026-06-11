@@ -513,7 +513,32 @@
   border-color: var(--accent-soft);
 }
 
-/* Right-aligned action group (Mesaj at + İletişim). */
+/* Başvur — primary apply CTA for seekers (distinct green). */
+.ep-feed-apply-form { display: inline-flex; margin: 0; }
+.ep-feed-apply {
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.78rem;
+  border-radius: 999px;
+  border: 1px solid #2e9e5b;
+  background: #2e9e5b;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+.ep-feed-apply:hover {
+  transform: translateY(-1px);
+  background: #27854a;
+  border-color: #27854a;
+}
+
+/* Right-aligned action group (Başvur + Mesaj at + İletişim). */
 .ep-feed-foot-actions {
   margin-left: auto;
   display: inline-flex;

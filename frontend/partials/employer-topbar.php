@@ -35,6 +35,7 @@ if ($companyInitials === '') {
 $tabs = $isSeekerBar
     ? [
         'profile'  => ['label' => 'Profilim', 'href' => '/seeker-panel.php'],
+        'feed'     => ['label' => 'Akış',     'href' => '/akis.php'],
         'messages' => ['label' => 'Mesajlar', 'href' => '/mesajlar.php'],
     ]
     : [

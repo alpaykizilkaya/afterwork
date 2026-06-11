@@ -4,20 +4,31 @@ declare(strict_types=1);
 
 session_start();
 
-// DEV BYPASS — localhost only, remove before pushing to production
-if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
+// DEV BYPASS — localhost only. Akış is now used by employers AND seekers, so
+// don't override an existing session (a seeker arriving from their panel must
+// stay a seeker). Seed a dev employer only when nobody is signed in.
+if (
+    in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)
+    && !isset($_SESSION['account'])
+) {
     $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
     $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
 }
 
+$awRole = (string) ($_SESSION['account']['role'] ?? '');
 if (
     !isset($_SESSION['account'])
     || !is_array($_SESSION['account'])
-    || (string) ($_SESSION['account']['role'] ?? '') !== 'employer'
+    || !in_array($awRole, ['employer', 'seeker'], true)
 ) {
     header('Location: /auth.php#giris');
     exit;
 }
+// A signed-in seeker has no employer profile, so $employerId stays 0 and the
+// feed scope (employer_id <> 0) shows every real company's listing.
+$isSeeker = $awRole === 'seeker';
+$applyFlash = $_SESSION['flash_apply'] ?? null;
+unset($_SESSION['flash_apply']);
 
 require_once __DIR__ . '/../../../backend/config/db.php';
 require_once __DIR__ . '/../../../backend/config/taxonomy.php';
@@ -475,6 +486,12 @@ $sortLabels = [
         </div>
       <?php endif; ?>
 
+      <?php if ($applyFlash !== null): ?>
+        <div class="ep-feedback ep-feedback--<?= ($applyFlash['type'] ?? '') === 'error' ? 'error' : 'success' ?>" role="status">
+          <p><?= htmlspecialchars((string) ($applyFlash['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+        </div>
+      <?php endif; ?>
+
       <p class="ep-feed-meta">
         <?php if ($resultCount > 0): ?>
           <strong><?= number_format($resultCount, 0, ',', '.') ?></strong> ilan
@@ -559,6 +576,17 @@ $sortLabels = [
                 <span class="ep-poster-time ep-feed-posted"><?= htmlspecialchars($ago, ENT_QUOTES, 'UTF-8') ?></span>
               <?php endif; ?>
               <span class="ep-feed-foot-actions">
+                <?php if ($isSeeker): ?>
+                  <form class="ep-feed-apply-form" method="post" action="/basvur.php">
+                    <input type="hidden" name="listing_id" value="<?= (int) $lst['id'] ?>">
+                    <button type="submit" class="ep-feed-apply">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M5 12l5 5L20 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      Başvur
+                    </button>
+                  </form>
+                <?php endif; ?>
                 <?php if ($lAccId > 0 && $lAccId !== $employerId): ?>
                   <a class="ep-feed-msg" href="/mesaj-baslat.php?account=<?= $lAccId ?>&listing=<?= (int) $lst['id'] ?>">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">

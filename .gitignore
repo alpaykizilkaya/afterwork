@@ -2,3 +2,6 @@
 backend/config/config.local.php
 .claude/
 .obsidian/
+
+# Local Figma MCP config (not for prod)
+.mcp.json

@@ -75,6 +75,14 @@ switch ($route) {
         require $PAGES . '/shared/start-conversation.php';
         break;
 
+    case 'basvur.php':
+        require $PAGES . '/shared/apply-action.php';
+        break;
+
+    case 'okul-ara.php':
+        require $PAGES . '/shared/school-search.php';
+        break;
+
     case 'isveren-panel.php':
         require $PAGES . '/employer-panel/dashboard-page.php';
         break;
