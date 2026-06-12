@@ -1,0 +1,27 @@
+/* İşveren — aday inceleme ekranı (employer/panel.css + seeker/panel.css üstüne) */
+.ap-back { display:inline-block; margin:0 0 1rem; color:var(--muted); text-decoration:none; font-weight:600; font-size:.92rem; }
+.ap-back:hover { color:var(--ink); }
+
+.ap-decide { position: sticky; top: 1rem; display:flex; flex-direction:column; gap:.8rem; align-items:flex-start; }
+.ap-status { display:inline-flex; padding:.32rem .8rem; border-radius:999px; font-size:.82rem; font-weight:700; background:var(--bg-soft); color:var(--muted); }
+.ap-status--submitted { background:rgba(63,134,240,.14); color:#2f6fe0; }
+.ap-status--reviewed,.ap-status--shortlisted,.ap-status--interview { background:rgba(217,181,131,.22); color:#9a702f; }
+.ap-status--offered { background:rgba(46,158,91,.16); color:#1f7a45; }
+.ap-status--rejected { background:rgba(200,55,45,.12); color:#b5362c; }
+.ap-date { font-size:.85rem; }
+.ap-status-form { display:flex; flex-direction:column; gap:.6rem; width:100%; }
+.ap-msg { width:100%; }
+.ap-contacts { display:flex; flex-direction:column; gap:.5rem; width:100%; margin-top:.2rem; }
+.ap-contact { display:flex; flex-direction:column; gap:.1rem; padding:.5rem .8rem; border:1px solid var(--line); border-radius:11px; color:var(--ink); text-decoration:none; font-size:.9rem; background:#fff; }
+.ap-contact span { color:var(--muted-soft); font-size:.7rem; text-transform:uppercase; letter-spacing:.07em; }
+a.ap-contact:hover { box-shadow:var(--shadow); }
+
+.ap-docs { display:flex; flex-wrap:wrap; gap:.6rem; }
+.ap-doc { display:flex; align-items:center; gap:.55rem; max-width:260px; padding:.6rem .8rem; border:1px solid var(--line); border-radius:11px; background:#fff; text-decoration:none; color:var(--ink); }
+.ap-doc:hover { box-shadow:var(--shadow); }
+.ap-doc-ic { display:grid; place-items:center; width:34px; height:34px; border-radius:8px; background:var(--accent); color:#f5f3ef; font-size:.58rem; font-weight:800; }
+.ap-doc-name { font-size:.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ap-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:.5rem; margin-top:.8rem; }
+.ap-gallery img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+.ap-videos { display:grid; gap:.7rem; margin-top:.8rem; }
+.ap-videos video { width:100%; border-radius:10px; background:#000; }

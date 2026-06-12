@@ -1,0 +1,86 @@
+/* Afterwork ürün turu — spotlight + ipucu balonu. Krem/lacivert, employer +
+   seeker panellerinde ortak. Tüm boyama JS tarafından konumlandırılır. */
+.aw-tour-root { position: fixed; inset: 0; z-index: 9999; }
+.aw-tour-root[hidden] { display: none; }
+
+/* spotlight: hedefi saran kutu, dışını karartır (dev box-shadow) */
+.aw-tour-spot {
+  position: absolute;
+  border-radius: 14px;
+  box-shadow: 0 0 0 4px rgba(217, 181, 131, 0.9), 0 0 0 9999px rgba(10, 20, 27, 0.62);
+  transition: top 0.32s cubic-bezier(0.22, 0.61, 0.36, 1), left 0.32s cubic-bezier(0.22, 0.61, 0.36, 1),
+              width 0.32s cubic-bezier(0.22, 0.61, 0.36, 1), height 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+  pointer-events: none;
+}
+/* ortalanmış (hedefsiz) adım için tam ekran karartma */
+.aw-tour-spot.is-center {
+  top: 50%; left: 50%; width: 0; height: 0;
+  box-shadow: 0 0 0 9999px rgba(10, 20, 27, 0.62);
+}
+
+.aw-tour-pop {
+  position: absolute;
+  width: min(340px, calc(100vw - 32px));
+  background: #fff;
+  border: 1px solid var(--line, #e6e1d8);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px -16px rgba(10, 20, 27, 0.5);
+  padding: 1.15rem 1.2rem 1rem;
+  animation: aw-tour-pop-in 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  transition: top 0.3s ease, left 0.3s ease;
+}
+@keyframes aw-tour-pop-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .aw-tour-spot, .aw-tour-pop { transition: none; animation: none; }
+}
+
+.aw-tour-close {
+  position: absolute; top: 0.6rem; right: 0.7rem;
+  width: 1.7rem; height: 1.7rem; display: grid; place-items: center;
+  border: 0; background: transparent; border-radius: 999px;
+  font-size: 1.1rem; line-height: 1; color: #98928a; cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.aw-tour-close:hover { background: #f0ece4; color: #11212d; }
+
+.aw-tour-kicker {
+  margin: 0 0 0.3rem; font-size: 0.68rem; letter-spacing: 0.13em;
+  text-transform: uppercase; color: #b79a6a; font-weight: 800;
+}
+.aw-tour-title { margin: 0 0 0.35rem; font-size: 1.12rem; font-weight: 700; letter-spacing: -0.01em; color: #11212d; padding-right: 1.2rem; }
+.aw-tour-text { margin: 0; font-size: 0.93rem; line-height: 1.55; color: #5c5750; }
+
+.aw-tour-foot {
+  margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid #efeae1;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.aw-tour-dots { display: inline-flex; gap: 0.3rem; margin-right: auto; }
+.aw-tour-dot { width: 0.42rem; height: 0.42rem; border-radius: 999px; background: #ddd6ca; transition: background-color 0.2s ease, width 0.2s ease; }
+.aw-tour-dot.is-on { background: #11212d; width: 1.1rem; }
+
+.aw-tour-btn {
+  appearance: none; font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.46rem 0.95rem; border-radius: 999px; font-size: 0.86rem; font-weight: 600;
+  border: 1px solid #d9d3c8; background: #fff; color: #11212d;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.1s ease, opacity 0.16s ease;
+}
+.aw-tour-btn:hover { box-shadow: 0 6px 14px -8px rgba(10, 20, 27, 0.4); }
+.aw-tour-btn:active { transform: translateY(1px); }
+.aw-tour-btn--solid { background: #11212d; color: #f5f3ef; border-color: transparent; }
+.aw-tour-btn--solid:hover { background: #1c3343; }
+.aw-tour-btn[disabled] { opacity: 0.4; cursor: default; box-shadow: none; }
+
+/* her zaman görünen "Atla" — alt şeritte sabit */
+.aw-tour-skip {
+  position: absolute; left: 1.2rem; bottom: -2.4rem;
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #f0ece4; color: #fff;
+  font: inherit; font-size: 0.82rem; font-weight: 600;
+  padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer;
+  background: rgba(17, 33, 45, 0.78); backdrop-filter: blur(4px);
+  transition: background-color 0.16s ease;
+}
+.aw-tour-skip:hover { background: rgba(17, 33, 45, 0.95); }

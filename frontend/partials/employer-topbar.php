@@ -127,7 +127,7 @@ $notifWhen = static function (string $ts): string {
     <img src="/frontend/assets/images/afterwork-logo.png" alt="Afterwork">
   </a>
 
-  <nav class="ep-tabs" aria-label="Panel navigasyonu">
+  <nav class="ep-tabs" aria-label="Panel navigasyonu" data-tour="nav">
     <?php foreach ($tabs as $key => $tab): ?>
       <a
         class="ep-tab<?= $activeTab === $key ? ' is-active' : '' ?>"
@@ -156,7 +156,7 @@ $notifWhen = static function (string $ts): string {
 
   <div class="ep-top-actions">
     <?php if (!$isSeekerBar): ?>
-    <a class="ep-cta" href="/isveren-panel.php?yeni=1">
+    <a class="ep-cta" href="/isveren-panel.php?yeni=1" data-tour="new">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
@@ -164,7 +164,15 @@ $notifWhen = static function (string $ts): string {
     </a>
     <?php endif; ?>
 
-    <div class="ep-notif ep-avatar-menu" data-ep-menu>
+    <button type="button" class="ep-icon-btn ep-help" data-tour-start aria-label="Yardım turu" title="Nasıl çalışır? — yardım turu">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8 8a2 2 0 1 1 2.6 1.9c-.5.2-.6.5-.6 1v.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <circle cx="10" cy="14" r="0.9" fill="currentColor"/>
+      </svg>
+    </button>
+
+    <div class="ep-notif ep-avatar-menu" data-ep-menu data-tour="bell">
       <button type="button" class="ep-icon-btn ep-bell" data-ep-menu-trigger aria-haspopup="true" aria-expanded="false" aria-label="Bildirimler" title="Bildirimler">
         <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M10 3a5 5 0 0 0-5 5v3l-1.2 1.8a.75.75 0 0 0 .62 1.17h11.16a.75.75 0 0 0 .62-1.17L15 11V8a5 5 0 0 0-5-5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>

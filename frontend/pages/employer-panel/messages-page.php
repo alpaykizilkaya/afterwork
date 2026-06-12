@@ -12,8 +12,8 @@ if (
     in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)
     && !isset($_SESSION['account'])
 ) {
-    $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
-    $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
+    $_SESSION['account']  = ['account_id' => 99, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
+    $_SESSION['employer'] = ['id' => 99, 'account_id' => 99, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
 }
 
 // Mesajlar is shared: both employers and seekers use the same two-pane view.
@@ -244,6 +244,7 @@ $renderThreads = static function (array $list, string $listSide) use ($h, $sideH
   <link rel="stylesheet" href="/frontend/assets/css/employer/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/panel.css') ?>">
   <link rel="stylesheet" href="/frontend/assets/css/employer/messages.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/messages.css') ?>">
   <link rel="stylesheet" href="/frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
+  <link rel="stylesheet" href="/frontend/assets/css/shared/tour.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/tour.css') ?>">
 </head>
 <body>
   <div class="ep-page">
@@ -351,5 +352,6 @@ $renderThreads = static function (array $list, string $listSide) use ($h, $sideH
   <script src="/frontend/assets/js/employer/topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/topbar.js') ?>" defer></script>
   <script src="/frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
   <script src="/frontend/assets/js/employer/messages.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/messages.js') ?>" defer></script>
+  <?php include __DIR__ . '/../../partials/tour-config.php'; ?>
 </body>
 </html>

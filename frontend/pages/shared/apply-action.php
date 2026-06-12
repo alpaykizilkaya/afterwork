@@ -14,7 +14,13 @@ require_once __DIR__ . '/../../../backend/config/db.php';
 require_once __DIR__ . '/../../../backend/auth/session-helper.php';
 require_once __DIR__ . '/../../../backend/applications/record-application.php';
 
+// Return to the page the apply came from (e.g. the listing detail) when a safe
+// local path is supplied; otherwise fall back to the feed.
 $back = '/akis.php';
+$ret  = (string) ($_POST['return'] ?? '');
+if ($ret !== '' && $ret[0] === '/' && !str_starts_with($ret, '//')) {
+    $back = $ret;
+}
 
 if (
     !isset($_SESSION['account'])

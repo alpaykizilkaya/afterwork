@@ -1,3 +1,9 @@
+/* Sayfalar arası yumuşak geçiş (Chrome/Edge — destekleyen tarayıcılarda
+   tüm aynı-köken navigasyonları cross-fade ile geçer; diğerlerinde sessizce yok sayılır). */
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation-duration: 0.16s; }
+::view-transition-new(root) { animation-duration: 0.16s; }
+
 :root {
   --bg: #f5f3ef;
   --text: #06141b;

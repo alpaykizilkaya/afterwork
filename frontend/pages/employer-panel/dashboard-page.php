@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 session_start();
 
-// DEV BYPASS — localhost only, remove before pushing to production
-if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
-    $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
-    $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
-}
+// DEV BYPASS — localhost only (oturum yoksa dev işveren tohumlar).
+require_once __DIR__ . '/../../../backend/auth/dev-session.php';
+aw_dev_session('employer');
 
-if (
-    !isset($_SESSION['account'])
-    || !is_array($_SESSION['account'])
-    || (string) ($_SESSION['account']['role'] ?? '') !== 'employer'
-) {
-    header('Location: auth.php#giris');
+// Rol kilidi: giriş yoksa auth'a; başka rolle giriş varsa KENDİ paneline
+// (işveren çıkış yapmadan anasayfaya ya da iş arayan profiline geçemez).
+if (!isset($_SESSION['account']) || !is_array($_SESSION['account'])) {
+    header('Location: /auth.php#giris');
+    exit;
+}
+if ((string) ($_SESSION['account']['role'] ?? '') !== 'employer') {
+    header('Location: ' . ((string) ($_SESSION['account']['role'] ?? '') === 'seeker' ? '/seeker-panel.php' : '/auth.php#giris'));
     exit;
 }
 
@@ -317,6 +317,7 @@ $isEditing = $isDetailMode && $editListing !== null;
   <link rel="stylesheet" href="frontend/assets/css/employer/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/employer/panel.css') ?>">
   <link rel="stylesheet" href="frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
   <link rel="stylesheet" href="frontend/assets/css/shared/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/verify-banner.css') ?>">
+  <link rel="stylesheet" href="frontend/assets/css/shared/tour.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/tour.css') ?>">
 </head>
 <body>
   <div class="ep-page">
@@ -910,5 +911,6 @@ $isEditing = $isDetailMode && $editListing !== null;
   <script src="frontend/assets/js/employer/topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/topbar.js') ?>" defer></script>
   <script src="frontend/assets/js/employer/panel.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/panel.js') ?>" defer></script>
   <script src="frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
+  <?php include __DIR__ . '/../../partials/tour-config.php'; ?>
 </body>
 </html>

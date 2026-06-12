@@ -20,8 +20,8 @@ if (
     in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)
     && !isset($_SESSION['account'])
 ) {
-    $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
-    $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
+    $_SESSION['account']  = ['account_id' => 99, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
+    $_SESSION['employer'] = ['id' => 99, 'account_id' => 99, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
 }
 
 $role = (string) ($_SESSION['account']['role'] ?? '');

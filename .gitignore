@@ -1,7 +1,31 @@
 .DS_Store
-backend/config/config.local.php
 .claude/
 .obsidian/
 
+# ── Secrets / local-only config (NEVER commit) ──
+backend/config/config.local.php
+backend/config/config.local.*
+**/config.local.php
+.env
+.env.*
+*.env
+secrets.php
+*credentials*
+*.pem
+*.key
+
 # Local Figma MCP config (not for prod)
 .mcp.json
+
+# Kullanıcı yüklemeleri (foto/video/belge) — repoya girmez, .htaccess hariç
+frontend/assets/uploads/*
+!frontend/assets/uploads/.htaccess
+!frontend/assets/uploads/.gitkeep
+
+# Database dumps / backups (may contain real user data + hashes)
+*.sql.gz
+*.sqlite
+afterwo1_afterworkdb*.sql
+*-dump.sql
+*backup*.sql
+/dump.sql

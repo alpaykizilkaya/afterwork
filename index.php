@@ -28,18 +28,16 @@ switch ($route) {
 
         require_once __DIR__ . '/backend/auth/session-helper.php';
 
-        // Signed-in users land on their panel, not the public landing page.
-        // `?home=1` is an escape hatch for previewing the public home while logged in.
-        if (!isset($_GET['home'])) {
-            $role = $_SESSION['account']['role'] ?? '';
-            if ($role === 'employer') {
-                header('Location: /isveren-panel.php');
-                exit;
-            }
-            if ($role === 'seeker') {
-                header('Location: /seeker-panel.php');
-                exit;
-            }
+        // Giriş yapan kullanıcı HER ZAMAN kendi paneline gider — çıkış yapmadan
+        // anasayfaya (public landing) dönemez. Anonim kullanıcı home'u görür.
+        $role = $_SESSION['account']['role'] ?? '';
+        if ($role === 'employer') {
+            header('Location: /isveren-panel.php');
+            exit;
+        }
+        if ($role === 'seeker') {
+            header('Location: /seeker-panel.php');
+            exit;
         }
 
         require $PAGES . '/home/home-page.php';
@@ -77,6 +75,22 @@ switch ($route) {
 
     case 'basvur.php':
         require $PAGES . '/shared/apply-action.php';
+        break;
+
+    case 'kaydet.php':
+        require $PAGES . '/shared/save-action.php';
+        break;
+
+    case 'basvuru.php':
+        require $PAGES . '/employer-panel/applicant-page.php';
+        break;
+
+    case 'yukle.php':
+        require $PAGES . '/shared/upload-action.php';
+        break;
+
+    case 'medya-sil.php':
+        require $PAGES . '/shared/media-delete-action.php';
         break;
 
     case 'okul-ara.php':

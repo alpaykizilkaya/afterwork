@@ -504,6 +504,7 @@
   color: #fefcff;
   font-size: 0.76rem;
   font-weight: 700;
+  white-space: nowrap;
   text-decoration: none;
   transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
 }
@@ -513,7 +514,7 @@
   border-color: var(--accent-soft);
 }
 
-/* Başvur — primary apply CTA for seekers (distinct green). */
+/* Başvur — primary apply CTA for seekers (distinct blue). */
 .ep-feed-apply-form { display: inline-flex; margin: 0; }
 .ep-feed-apply {
   position: relative;
@@ -525,17 +526,18 @@
   gap: 0.3rem;
   padding: 0.28rem 0.78rem;
   border-radius: 999px;
-  border: 1px solid #2e9e5b;
-  background: #2e9e5b;
+  border: 1px solid #3f86f0;
+  background: #3f86f0;
   color: #fff;
   font-size: 0.76rem;
   font-weight: 700;
+  white-space: nowrap;
   transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
 }
 .ep-feed-apply:hover {
   transform: translateY(-1px);
-  background: #27854a;
-  border-color: #27854a;
+  background: #2f6fe0;
+  border-color: #2f6fe0;
 }
 
 /* Right-aligned action group (Başvur + Mesaj at + İletişim). */
@@ -547,6 +549,13 @@
 }
 .ep-feed-foot-actions .ep-feed-contact,
 .ep-feed-foot-actions .ep-feed-msg { margin-left: 0; }
+/* Card "Başvur" must match "Mesaj at" size (not the big filter "Uygula" button
+   that shares the .ep-feed-apply class). */
+.ep-feed-foot-actions .ep-feed-apply {
+  min-height: 0;
+  padding: 0.28rem 0.78rem;
+  font-size: 0.76rem;
+}
 
 /* Footer holds just the posted time (left) and the action group (right). */
 .ep-feed-card .ep-feed-posted { margin-left: 0; }
@@ -1084,3 +1093,27 @@
   .ep-vw-hero-inner { animation: none; }
   .ep-vw-back, .ep-vw-cta, .ep-vw-tile, .ep-vw-card-links a { transition: none; transform: none; }
 }
+
+/* ── Aday (seeker) ilan-detay aksiyonları (koyu hero üstünde) ──────── */
+.ep-vw-cta--apply { background: #3f86f0; border-color: #3f86f0; color: #fff; }
+.ep-vw-cta--apply:hover { background: #2f6fe0; border-color: #2f6fe0; }
+.ep-vw-cta--done {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #eef3f7; cursor: default;
+}
+.ep-vw-ghost {
+  appearance: none; cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 2.6rem; padding: 0 1.2rem; border-radius: 999px;
+  background: transparent; border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #eef3f7; font-size: 0.88rem; font-weight: 600; text-decoration: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+.ep-vw-ghost:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.6); transform: translateY(-1px); }
+.ep-vw-flash {
+  margin: 0.4rem 0 0; padding: 0.6rem 0.95rem; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f4f7fa; font-size: 0.9rem; font-weight: 600;
+}
+.ep-vw-flash--error { background: rgba(200, 55, 45, 0.22); border-color: rgba(255, 170, 160, 0.5); }

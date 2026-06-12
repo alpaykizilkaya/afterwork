@@ -4,16 +4,22 @@ declare(strict_types=1);
 
 session_start();
 
-// DEV BYPASS — localhost only, remove before pushing to production
-if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
-    $_SESSION['account']  = ['account_id' => 0, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
-    $_SESSION['employer'] = ['id' => 0, 'account_id' => 0, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
+// DEV BYPASS — localhost only. Seekers AND employers open listing details, so
+// don't override an existing session (a seeker arriving from the feed must stay
+// a seeker). Seed a dev employer only when nobody is signed in.
+if (
+    in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)
+    && !isset($_SESSION['account'])
+) {
+    $_SESSION['account']  = ['account_id' => 99, 'email' => 'dev@localhost', 'role' => 'employer', 'is_verified' => 1];
+    $_SESSION['employer'] = ['id' => 99, 'account_id' => 99, 'email' => 'dev@localhost', 'company_name' => 'Dev Şirket', 'role' => 'employer'];
 }
 
+$awRole = (string) ($_SESSION['account']['role'] ?? '');
 if (
     !isset($_SESSION['account'])
     || !is_array($_SESSION['account'])
-    || (string) ($_SESSION['account']['role'] ?? '') !== 'employer'
+    || !in_array($awRole, ['employer', 'seeker'], true)
 ) {
     header('Location: /auth.php#giris');
     exit;
@@ -22,8 +28,13 @@ if (
 require_once __DIR__ . '/../../../backend/config/db.php';
 require_once __DIR__ . '/../../../backend/auth/session-helper.php';
 
+$isSeeker = $awRole === 'seeker';
 $employer = is_array($_SESSION['employer'] ?? null) ? $_SESSION['employer'] : [];
 $companyName = trim((string) ($employer['company_name'] ?? '')) ?: 'Şirketiniz';
+
+// flash from apply / save actions
+$detailFlash = $_SESSION['flash_apply'] ?? ($_SESSION['flash_save'] ?? null);
+unset($_SESSION['flash_apply'], $_SESSION['flash_save']);
 
 $viewId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 if ($viewId <= 0) {
@@ -38,7 +49,7 @@ try {
     $pdo = db();
     $stmt = $pdo->prepare(
         'SELECT jl.*, e.company_name, e.sector, e.city, e.company_size, e.is_iso500,
-                e.about, e.website, e.linkedin
+                e.about, e.website, e.linkedin, e.account_id AS employer_account_id
          FROM job_listings jl
          JOIN employers e ON e.id = jl.employer_id
          WHERE jl.id = :id AND jl.is_active = 1
@@ -147,6 +158,34 @@ try {
     // analytics is best-effort — never let it break the listing view
 }
 
+/* ---- viewer-relative state (seeker actions / employer ownership) ------ */
+$employerAccountId = (int) ($listing['employer_account_id'] ?? 0);
+$viewerEmployerId  = (int) ($employer['id'] ?? 0);
+$isOwner           = !$isSeeker && $viewerEmployerId > 0 && (int) ($listing['employer_id'] ?? 0) === $viewerEmployerId;
+$returnPath        = '/akis.php?id=' . $viewId;
+
+$alreadyApplied = false;
+$alreadySaved   = false;
+$seekerVerified = (int) ($_SESSION['account']['is_verified'] ?? 0) === 1;
+if ($isSeeker) {
+    $meAcc = (int) ($_SESSION['account']['account_id'] ?? 0);
+    try {
+        $qa = $pdo->prepare('SELECT 1 FROM listing_applications WHERE listing_id = :l AND seeker_account_id = :s LIMIT 1');
+        $qa->execute(['l' => $viewId, 's' => $meAcc]);
+        $alreadyApplied = (bool) $qa->fetchColumn();
+        $qs = $pdo->prepare('SELECT 1 FROM listing_saves WHERE listing_id = :l AND seeker_account_id = :s LIMIT 1');
+        $qs->execute(['l' => $viewId, 's' => $meAcc]);
+        $alreadySaved = (bool) $qs->fetchColumn();
+    } catch (Throwable) {
+        // best-effort
+    }
+    try {
+        $seekerVerified = refresh_verification_flag($pdo);
+    } catch (Throwable) {
+        // session flag fallback
+    }
+}
+
 $initials = static function (string $name): string {
     $words = preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: ['?'];
     $a = mb_substr((string) ($words[0] ?? '?'), 0, 1, 'UTF-8');
@@ -238,6 +277,7 @@ $linkedin = trim((string) ($listing['linkedin'] ?? ''));
             </svg>
             Akışa dön
           </a>
+          <?php if (!$isSeeker): ?>
           <span class="ep-vw-badge">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" stroke="currentColor" stroke-width="1.3"/>
@@ -245,7 +285,12 @@ $linkedin = trim((string) ($listing['linkedin'] ?? ''));
             </svg>
             İzleme modu
           </span>
+          <?php endif; ?>
         </div>
+
+        <?php if ($detailFlash !== null): ?>
+          <div class="ep-vw-flash<?= ($detailFlash['type'] ?? '') === 'error' ? ' ep-vw-flash--error' : '' ?>"><?= htmlspecialchars((string) ($detailFlash['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+        <?php endif; ?>
 
         <div class="ep-vw-company">
           <span class="ep-vw-avatar" aria-hidden="true"><?= htmlspecialchars($initials($company), ENT_QUOTES, 'UTF-8') ?></span>
@@ -277,7 +322,25 @@ $linkedin = trim((string) ($listing['linkedin'] ?? ''));
         </div>
 
         <div class="ep-vw-hero-actions">
-          <?php if ($email !== ''): ?>
+          <?php if ($isSeeker): ?>
+            <?php if ($alreadyApplied): ?>
+              <span class="ep-vw-cta ep-vw-cta--done">✓ Başvurdun</span>
+            <?php else: ?>
+              <form method="post" action="/basvur.php" style="margin:0;">
+                <input type="hidden" name="listing_id" value="<?= (int) $viewId ?>">
+                <input type="hidden" name="return" value="<?= htmlspecialchars($returnPath, ENT_QUOTES, 'UTF-8') ?>">
+                <button type="submit" class="ep-vw-cta ep-vw-cta--apply">Başvur</button>
+              </form>
+            <?php endif; ?>
+            <form method="post" action="/kaydet.php" style="margin:0;">
+              <input type="hidden" name="listing_id" value="<?= (int) $viewId ?>">
+              <input type="hidden" name="return" value="<?= htmlspecialchars($returnPath, ENT_QUOTES, 'UTF-8') ?>">
+              <button type="submit" class="ep-vw-ghost"><?= $alreadySaved ? '✓ Cebinde' : 'Cebe at' ?></button>
+            </form>
+            <?php if ($employerAccountId > 0): ?>
+              <a class="ep-vw-ghost" href="/mesaj-baslat.php?account=<?= (int) $employerAccountId ?>&listing=<?= (int) $viewId ?>">Mesaj / görüşme talebi</a>
+            <?php endif; ?>
+          <?php elseif ($email !== ''): ?>
             <a class="ep-vw-cta" href="mailto:<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>?subject=<?= rawurlencode($title . ' ilanı hakkında') ?>">
               İletişime geç
             </a>
@@ -350,9 +413,23 @@ $linkedin = trim((string) ($listing['linkedin'] ?? ''));
             <?php endif; ?>
           </div>
 
-          <p class="ep-vw-note">
-            <strong>İzleme modu.</strong> Bu görünüm yalnızca inceleme amaçlıdır; bu ilana başvuru gönderilmez.
-          </p>
+          <?php if ($isSeeker): ?>
+            <p class="ep-vw-note">
+              <?php if (!$seekerVerified): ?>
+                <strong>Başvurmadan önce e-postanı doğrula.</strong> Doğrulama sonrası tek tıkla başvurabilirsin.
+              <?php else: ?>
+                <strong>İpucu.</strong> Yukarıdan başvur, sonra bakmak için cebine at ya da işverene mesaj gönder.
+              <?php endif; ?>
+            </p>
+          <?php elseif ($isOwner): ?>
+            <p class="ep-vw-note">
+              <strong>Bu senin ilanın.</strong> Detaylı performans için <a href="/mercek.php?id=<?= (int) $viewId ?>">Mercek</a>’i aç ya da <a href="/isveren-panel.php?ilan=<?= (int) $viewId ?>">düzenle</a>.
+            </p>
+          <?php else: ?>
+            <p class="ep-vw-note">
+              <strong>İzleme modu.</strong> Bu görünüm yalnızca inceleme amaçlıdır; bu ilana başvuru gönderilmez.
+            </p>
+          <?php endif; ?>
         </aside>
       </div>
     </section>

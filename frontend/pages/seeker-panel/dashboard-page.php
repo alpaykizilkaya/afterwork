@@ -4,21 +4,18 @@ declare(strict_types=1);
 
 session_start();
 
-// DEV BYPASS — localhost only, remove before pushing to production.
-// Points at a real local seeker account (aday@local.test, completed profile) so
-// the dashboard renders with data on localhost. Flip its seekers.profile_completed
-// to 0 to preview the onboarding wizard instead.
-if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8000', '127.0.0.1', '127.0.0.1:8000'], true)) {
-    $_SESSION['account'] = ['account_id' => 27, 'email' => 'aday@local.test', 'role' => 'seeker', 'is_verified' => 1];
-    $_SESSION['seeker']  = ['id' => 0, 'account_id' => 27, 'email' => 'aday@local.test', 'full_name' => 'Deniz Yıldız', 'role' => 'seeker'];
-}
+// DEV BYPASS — localhost only (oturum yoksa dev iş arayan tohumlar).
+require_once __DIR__ . '/../../../backend/auth/dev-session.php';
+aw_dev_session('seeker');
 
-if (
-    !isset($_SESSION['account'])
-    || !is_array($_SESSION['account'])
-    || (string) ($_SESSION['account']['role'] ?? '') !== 'seeker'
-) {
+// Rol kilidi: giriş yoksa auth'a; başka rolle giriş varsa KENDİ paneline
+// (iş arayan çıkış yapmadan anasayfaya ya da işveren profiline geçemez).
+if (!isset($_SESSION['account']) || !is_array($_SESSION['account'])) {
     header('Location: /auth.php#giris');
+    exit;
+}
+if ((string) ($_SESSION['account']['role'] ?? '') !== 'seeker') {
+    header('Location: ' . ((string) ($_SESSION['account']['role'] ?? '') === 'employer' ? '/isveren-panel.php' : '/auth.php#giris'));
     exit;
 }
 
@@ -74,6 +71,24 @@ $sectionDefs = [
     'languages'  => ['text' => ['languages'], 'int' => [], 'check' => []],
     'contact'    => ['text' => ['phone', 'linkedin', 'website'], 'int' => [], 'check' => []],
 ];
+
+// "Şirket Sorularım" — predefined question set, grouped. Answers are stored once
+// and reused to pre-fill future applications.
+$companyQuestions = [
+    'Çok Sorulan Sorular' => [
+        'net_salary'     => 'Aylık net ücret beklentiniz nedir?',
+        'travel_barrier' => 'Seyahat engeliniz var mı?',
+        'shift_weekend'  => 'Vardiyalı veya hafta sonları çalışır mısınız?',
+        'driving'        => 'Aktif olarak araç kullanıyor musunuz?',
+    ],
+    'Özgeçmişine Yönelik Sorular' => [
+        'english_level'     => 'İngilizce seviyeniz nedir?',
+        'programs'          => 'Hangi programları kullanabiliyorsunuz?',
+        'currently_working' => 'Şu an çalışıyor musunuz?',
+        'certificates'      => 'Hangi sertifikalarınız/belgeleriniz var?',
+    ],
+];
+$companyQuestionKeys = array_merge(...array_map('array_keys', array_values($companyQuestions)));
 
 /* ---- POST: onboarding finish OR per-section inline edit --------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -135,6 +150,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         header('Location: /seeker-panel.php#sec-' . $section);
         exit;
+    } elseif ($mode === 'toggle_otw') {
+        // "İş fırsatlarına açığım" anahtarı.
+        try {
+            $pdo->prepare('UPDATE seekers SET open_to_work = :v WHERE account_id = :acc')
+                ->execute(['v' => isset($_POST['open_to_work']) ? 1 : 0, 'acc' => $accountId]);
+        } catch (Throwable) {
+            // best-effort
+        }
+        header('Location: /seeker-panel.php#profilim');
+        exit;
+    } elseif ($mode === 'company_answer') {
+        $qkey   = (string) ($_POST['question_key'] ?? '');
+        $answer = mb_substr(trim((string) ($_POST['answer'] ?? '')), 0, 2000, 'UTF-8');
+        if (in_array($qkey, $companyQuestionKeys, true)) {
+            try {
+                if ($answer === '') {
+                    $pdo->prepare('DELETE FROM seeker_question_answers WHERE account_id = :acc AND question_key = :q')
+                        ->execute(['acc' => $accountId, 'q' => $qkey]);
+                } else {
+                    $pdo->prepare(
+                        'INSERT INTO seeker_question_answers (account_id, question_key, answer)
+                         VALUES (:acc, :q, :a)
+                         ON DUPLICATE KEY UPDATE answer = VALUES(answer)'
+                    )->execute(['acc' => $accountId, 'q' => $qkey, 'a' => $answer]);
+                }
+            } catch (Throwable) {
+                // best-effort (table may not be migrated yet)
+            }
+        }
+        header('Location: /seeker-panel.php#sorularim');
+        exit;
     }
 }
 
@@ -191,6 +237,159 @@ $opts = static function (array $list, string $current): string {
 
 $g = static fn (string $k): string => (string) ($seekerRow[$k] ?? '');
 $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+
+/* ---- collections: viewed / saved / applied listings ------------------ */
+// All three share the same card shape. Best-effort: missing tables → empty.
+$loadListings = static function (PDO $pdo, string $sql, int $acc): array {
+    try {
+        $st = $pdo->prepare($sql);
+        $st->execute(['acc' => $acc]);
+        return $st->fetchAll() ?: [];
+    } catch (Throwable) {
+        return [];
+    }
+};
+$viewedRows = $loadListings($pdo,
+    'SELECT jl.id, jl.title, jl.work_model, jl.location, jl.salary_min, jl.salary_max,
+            jl.employment_type, e.company_name, e.sector, MAX(v.viewed_at) AS ts
+       FROM listing_views v
+       JOIN job_listings jl ON jl.id = v.listing_id
+       JOIN employers e ON e.id = jl.employer_id
+      WHERE v.viewer_account_id = :acc AND jl.is_active = 1
+      GROUP BY jl.id
+      ORDER BY ts DESC
+      LIMIT 100', $accountId);
+$savedRows = $loadListings($pdo,
+    'SELECT jl.id, jl.title, jl.work_model, jl.location, jl.salary_min, jl.salary_max,
+            jl.employment_type, e.company_name, e.sector, s.saved_at AS ts
+       FROM listing_saves s
+       JOIN job_listings jl ON jl.id = s.listing_id
+       JOIN employers e ON e.id = jl.employer_id
+      WHERE s.seeker_account_id = :acc AND jl.is_active = 1
+      ORDER BY s.saved_at DESC
+      LIMIT 100', $accountId);
+$appliedRows = $loadListings($pdo,
+    'SELECT jl.id, jl.title, jl.work_model, jl.location, jl.salary_min, jl.salary_max,
+            jl.employment_type, e.company_name, e.sector, a.submitted_at AS ts, a.status
+       FROM listing_applications a
+       JOIN job_listings jl ON jl.id = a.listing_id
+       JOIN employers e ON e.id = jl.employer_id
+      WHERE a.seeker_account_id = :acc AND jl.is_active = 1
+      ORDER BY a.submitted_at DESC
+      LIMIT 100', $accountId);
+
+/* ---- company question answers ---------------------------------------- */
+$qAnswers = [];
+try {
+    $st = $pdo->prepare('SELECT question_key, answer FROM seeker_question_answers WHERE account_id = :acc');
+    $st->execute(['acc' => $accountId]);
+    foreach ($st->fetchAll() as $r) { $qAnswers[(string) $r['question_key']] = (string) $r['answer']; }
+} catch (Throwable) {
+    $qAnswers = [];
+}
+
+/* ---- portfolio media (avatar / image / video / doc) ------------------ */
+$mediaBy = ['avatar' => [], 'image' => [], 'video' => [], 'doc' => []];
+try {
+    $st = $pdo->prepare('SELECT id, kind, file_path, original_name, mime FROM seeker_media WHERE account_id = :a ORDER BY sort_order, id');
+    $st->execute(['a' => $accountId]);
+    foreach ($st->fetchAll() as $m) {
+        $k = (string) $m['kind'];
+        if (isset($mediaBy[$k])) { $mediaBy[$k][] = $m; }
+    }
+} catch (Throwable) {
+    // tablo henüz yoksa boş geç
+}
+$avatarMedia = $mediaBy['avatar'][0] ?? null;
+
+/* ---- status label for applications ----------------------------------- */
+$statusLabels = [
+    'submitted' => 'Gönderildi', 'reviewed' => 'İncelendi', 'shortlisted' => 'Ön elemede',
+    'interview' => 'Görüşme', 'offered' => 'Teklif', 'rejected' => 'Olumsuz', 'withdrawn' => 'Geri çekildi',
+];
+
+/* ---- collection section renderer (header + filter bar + grid/empty) --- */
+$renderCollection = static function (string $key, string $title, string $desc, string $searchPh, array $rows, array $empty, bool $isApplied = false) use ($h, $statusLabels): void {
+    // distinct filter options from the loaded rows
+    $locs = $models = $sectors = [];
+    foreach ($rows as $r) {
+        if (($v = trim((string) ($r['location'] ?? ''))) !== '') $locs[$v] = 1;
+        if (($v = trim((string) ($r['work_model'] ?? ''))) !== '') $models[$v] = 1;
+        if (($v = trim((string) ($r['sector'] ?? ''))) !== '') $sectors[$v] = 1;
+    }
+    ksort($locs); ksort($models); ksort($sectors);
+    ?>
+    <section class="sk-panel" data-panel="<?= $h($key) ?>" hidden>
+      <div class="sk-panel-head">
+        <h2 class="sk-panel-title"><?= $h($title) ?></h2>
+        <p class="sk-panel-desc"><?= $h($desc) ?></p>
+      </div>
+
+      <div class="sk-coll" data-coll>
+        <div class="sk-coll-bar">
+          <label class="sk-coll-search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <input type="search" placeholder="<?= $h($searchPh) ?>" data-coll-q>
+          </label>
+          <div class="sk-coll-filters">
+            <select class="sk-coll-filter" data-coll-filter="loc"><option value="">Konum</option><?php foreach (array_keys($locs) as $v): ?><option value="<?= $h($v) ?>"><?= $h($v) ?></option><?php endforeach; ?></select>
+            <select class="sk-coll-filter" data-coll-filter="model"><option value="">Çalışma Tercihi</option><?php foreach (array_keys($models) as $v): ?><option value="<?= $h($v) ?>"><?= $h($v) ?></option><?php endforeach; ?></select>
+            <select class="sk-coll-filter" data-coll-filter="sector"><option value="">Sektör</option><?php foreach (array_keys($sectors) as $v): ?><option value="<?= $h($v) ?>"><?= $h($v) ?></option><?php endforeach; ?></select>
+            <select class="sk-coll-filter sk-coll-filter--sort" data-coll-sort><option value="new">Sıralama: Yeni</option><option value="old">Eski</option><option value="salary">Maaş (yüksek)</option><option value="company">Şirket (A-Z)</option></select>
+          </div>
+        </div>
+
+        <?php if ($rows === []): ?>
+          <div class="sk-empty">
+            <div class="sk-empty-art" aria-hidden="true"><?= $empty['art'] ?? '' ?></div>
+            <h3 class="sk-empty-title"><?= $h($empty['title']) ?></h3>
+            <p class="sk-empty-text"><?= $h($empty['text']) ?></p>
+            <a class="sk-btn sk-btn--solid" href="<?= $h($empty['cta_href']) ?>"><?= $h($empty['cta']) ?></a>
+          </div>
+        <?php else: ?>
+          <div class="sk-coll-grid" data-coll-grid>
+            <?php foreach ($rows as $r):
+              $smin = (int) ($r['salary_min'] ?? 0); $smax = (int) ($r['salary_max'] ?? 0);
+              $salary = '';
+              if ($smin && $smax) $salary = number_format($smin, 0, ',', '.') . ' – ' . number_format($smax, 0, ',', '.') . ' ₺';
+              elseif ($smin) $salary = number_format($smin, 0, ',', '.') . ' ₺+';
+              elseif ($smax) $salary = number_format($smax, 0, ',', '.') . ' ₺';
+              $sortSalary = $smax ?: $smin;
+            ?>
+              <a class="sk-jobcard" href="/akis.php?id=<?= (int) $r['id'] ?>"
+                 data-card
+                 data-title="<?= $h(mb_strtolower(($r['title'] ?? '') . ' ' . ($r['company_name'] ?? ''), 'UTF-8')) ?>"
+                 data-loc="<?= $h($r['location'] ?? '') ?>"
+                 data-model="<?= $h($r['work_model'] ?? '') ?>"
+                 data-sector="<?= $h($r['sector'] ?? '') ?>"
+                 data-date="<?= $h((string) ($r['ts'] ?? '')) ?>"
+                 data-salary="<?= (int) $sortSalary ?>"
+                 data-company="<?= $h(mb_strtolower((string) ($r['company_name'] ?? ''), 'UTF-8')) ?>">
+                <div class="sk-jobcard-top">
+                  <span class="sk-jobcard-logo" aria-hidden="true"><?= $h(mb_strtoupper(mb_substr((string) ($r['company_name'] ?? '?'), 0, 1, 'UTF-8'), 'UTF-8')) ?></span>
+                  <div class="sk-jobcard-id">
+                    <p class="sk-jobcard-title"><?= $h($r['title'] ?? '') ?></p>
+                    <p class="sk-jobcard-company"><?= $h($r['company_name'] ?? '') ?><?php if (($r['sector'] ?? '') !== ''): ?> · <?= $h($r['sector']) ?><?php endif; ?></p>
+                  </div>
+                  <?php if ($isApplied): $stt = (string) ($r['status'] ?? 'submitted'); ?>
+                    <span class="sk-jobcard-status sk-status--<?= $h($stt) ?>"><?= $h($statusLabels[$stt] ?? 'Gönderildi') ?></span>
+                  <?php endif; ?>
+                </div>
+                <div class="sk-jobcard-meta">
+                  <?php if (($r['location'] ?? '') !== ''): ?><span class="sk-jobcard-chip"><?= $h($r['location']) ?></span><?php endif; ?>
+                  <?php if (($r['work_model'] ?? '') !== ''): ?><span class="sk-jobcard-chip"><?= $h($r['work_model']) ?></span><?php endif; ?>
+                  <?php if (($r['employment_type'] ?? '') !== ''): ?><span class="sk-jobcard-chip"><?= $h($r['employment_type']) ?></span><?php endif; ?>
+                  <?php if ($salary !== ''): ?><span class="sk-jobcard-salary"><?= $h($salary) ?></span><?php endif; ?>
+                </div>
+              </a>
+            <?php endforeach; ?>
+          </div>
+          <p class="sk-coll-nomatch" hidden>Aramana uyan sonuç yok.</p>
+        <?php endif; ?>
+      </div>
+    </section>
+    <?php
+};
 ?>
 <!doctype html>
 <html lang="tr">
@@ -202,6 +401,7 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'
   <link rel="stylesheet" href="/frontend/assets/css/seeker/panel.css?v=<?= filemtime(__DIR__ . '/../../assets/css/seeker/panel.css') ?>">
   <link rel="stylesheet" href="/frontend/assets/css/shared/logout-modal.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/logout-modal.css') ?>">
   <link rel="stylesheet" href="/frontend/assets/css/shared/verify-banner.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/verify-banner.css') ?>">
+  <link rel="stylesheet" href="/frontend/assets/css/shared/tour.css?v=<?= filemtime(__DIR__ . '/../../assets/css/shared/tour.css') ?>">
 </head>
 <?php if (!$completed): ?>
 <!-- ░░ ONBOARDING ░░ : blurred panel behind, 4-step wizard on top ░░ -->
@@ -374,7 +574,46 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'
       ];
       if ((int) ($seekerRow['is_disability'] ?? 0) === 1) { $details['Çalışma durumu'] = 'Engelli birey'; }
       $pencil = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.5 6.5l4 4" stroke="currentColor" stroke-width="1.6"/></svg>';
+      $navList = [
+        ['profilim',       'Vitrinim',        null,                   '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="1.7"/><path d="M5 19.5c0-3.6 3.1-5.5 7-5.5s7 1.9 7 5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'],
+        ['incelediklerim', 'Göz Attıklarım',  count($viewedRows),     '<svg viewBox="0 0 24 24" fill="none"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg>'],
+        ['kaydettiklerim', 'Cebimdekiler',    count($savedRows),      '<svg viewBox="0 0 24 24" fill="none"><path d="M6 4.5h12v15l-6-4-6 4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>'],
+        ['basvurularim',   'Gönderdiklerim',  count($appliedRows),    '<svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-7 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>'],
+        ['alarmlarim',     'Radarım',         null,                   '<svg viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 19a2 2 0 004 0" stroke="currentColor" stroke-width="1.7"/></svg>'],
+        ['tercihlerim',    'Pusulam',         null,                   '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>'],
+        ['sorularim',      'Hazır Yanıtlarım', null,                  '<svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16v11H9l-4 3v-3H4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'],
+      ];
+      $otwOn = (int) ($seekerRow['open_to_work'] ?? 1) === 1;
       ?>
+
+      <div class="sk-dash" data-dash>
+        <aside class="sk-nav" aria-label="Kariyer paneli" data-tour="sk-nav">
+          <?php foreach ($navList as $i => [$nkey, $nlabel, $nbadge, $nicon]): ?>
+            <button type="button" class="sk-nav-item<?= $i === 0 ? ' is-active' : '' ?>" data-nav="<?= $h($nkey) ?>">
+              <span class="sk-nav-ic" aria-hidden="true"><?= $nicon ?></span>
+              <span class="sk-nav-label"><?= $h($nlabel) ?></span>
+              <?php if ($nbadge !== null && $nbadge > 0): ?><span class="sk-nav-badge"><?= (int) $nbadge ?></span><?php endif; ?>
+            </button>
+          <?php endforeach; ?>
+        </aside>
+
+        <div class="sk-panels">
+
+        <!-- ░░ PANEL: PROFİLİM ░░ -->
+        <section class="sk-panel is-active" data-panel="profilim">
+
+          <!-- İş fırsatlarına açığım -->
+          <form class="sk-otw<?= $otwOn ? ' is-on' : '' ?>" method="post" action="/seeker-panel.php" data-otw-form data-tour="otw">
+            <input type="hidden" name="mode" value="toggle_otw">
+            <div class="sk-otw-text">
+              <strong>Yeni fırsatlara açığım</strong>
+              <span>Açıkken profilin işverenlerin aday aramalarında öne çıkar. <em>Görünürlüğü dilediğin an kapatabilirsin.</em></span>
+            </div>
+            <label class="sk-switch">
+              <input type="checkbox" name="open_to_work" <?= $otwOn ? 'checked' : '' ?> data-otw-toggle aria-label="İş fırsatlarına açığım">
+              <span class="sk-switch-track"><span class="sk-switch-thumb"></span></span>
+            </label>
+          </form>
 
       <!-- ░ HEADER ░ -->
       <article class="sk-profile" id="sec-header" data-section>
@@ -635,13 +874,176 @@ $h = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'
           </article>
         </aside>
       </div>
+          <!-- ░ PORTFÖYÜM ░ -->
+          <section class="sk-portfolio" id="portfoy" data-portfolio>
+            <div class="sk-pf-head">
+              <h2 class="sk-pf-title">Portföyüm</h2>
+              <p class="sk-pf-sub">CV’ni, belgelerini, fotoğraf ve videolarını ekle — profilin kişisel sitene dönüşsün.</p>
+            </div>
+
+            <label class="sk-pf-drop" data-pf-drop>
+              <input type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime,application/pdf,.doc,.docx" hidden data-pf-input>
+              <span class="sk-pf-drop-ic" aria-hidden="true">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 16V5m0 0L7.5 9.5M12 5l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </span>
+              <span class="sk-pf-drop-main">Dosyaları sürükle ya da seç</span>
+              <span class="sk-pf-drop-sub">Fotoğraf · video · PDF/Word — galeriden veya bilgisayardan</span>
+            </label>
+            <p class="sk-pf-msg" data-pf-msg hidden></p>
+
+            <!-- Belgeler & CV -->
+            <div class="sk-pf-group" data-pf-group="doc"<?= $mediaBy['doc'] === [] ? ' hidden' : '' ?>>
+              <h3 class="sk-pf-gtitle">Belgeler &amp; CV</h3>
+              <div class="sk-pf-docs" data-pf-docs>
+                <?php foreach ($mediaBy['doc'] as $m): $ext = strtoupper(pathinfo((string) $m['original_name'], PATHINFO_EXTENSION) ?: 'DOC'); ?>
+                  <div class="sk-pf-doc" data-media-id="<?= (int) $m['id'] ?>">
+                    <a class="sk-pf-doc-link" href="<?= $h($m['file_path']) ?>" target="_blank" rel="noopener">
+                      <span class="sk-pf-doc-ic" aria-hidden="true"><?= $h($ext) ?></span>
+                      <span class="sk-pf-doc-name"><?= $h($m['original_name']) ?></span>
+                    </a>
+                    <button type="button" class="sk-pf-del" data-pf-del title="Kaldır">×</button>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+
+            <!-- Videolar -->
+            <div class="sk-pf-group" data-pf-group="video"<?= $mediaBy['video'] === [] ? ' hidden' : '' ?>>
+              <h3 class="sk-pf-gtitle">Videolar</h3>
+              <div class="sk-pf-videos" data-pf-videos>
+                <?php foreach ($mediaBy['video'] as $m): ?>
+                  <div class="sk-pf-video" data-media-id="<?= (int) $m['id'] ?>">
+                    <video controls preload="metadata" src="<?= $h($m['file_path']) ?>"></video>
+                    <button type="button" class="sk-pf-del" data-pf-del title="Kaldır">×</button>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+
+            <!-- Galeri — üst üste deste + şeffaf ‹ › -->
+            <div class="sk-pf-group" data-pf-group="image"<?= $mediaBy['image'] === [] ? ' hidden' : '' ?>>
+              <h3 class="sk-pf-gtitle">Galeri</h3>
+              <div class="sk-pf-deck" data-pf-deck>
+                <button type="button" class="sk-pf-nav sk-pf-nav--prev" data-pf-prev aria-label="Önceki">‹</button>
+                <div class="sk-pf-stack" data-pf-stack>
+                  <?php foreach ($mediaBy['image'] as $idx => $m): ?>
+                    <figure class="sk-pf-slide<?= $idx === 0 ? ' is-active' : '' ?>" data-media-id="<?= (int) $m['id'] ?>">
+                      <img src="<?= $h($m['file_path']) ?>" alt="<?= $h($m['original_name']) ?>" loading="lazy">
+                      <button type="button" class="sk-pf-del" data-pf-del title="Kaldır">×</button>
+                    </figure>
+                  <?php endforeach; ?>
+                </div>
+                <button type="button" class="sk-pf-nav sk-pf-nav--next" data-pf-next aria-label="Sonraki">›</button>
+                <span class="sk-pf-count" data-pf-count></span>
+              </div>
+            </div>
+          </section>
+
+        </section><!-- /panel profilim -->
+
+        <?php
+        // Bölüme özel çizimler — krem/lacivert, referans görselden bağımsız, kendi setimiz.
+        $artViewed = '<svg width="150" height="118" viewBox="0 0 150 118" fill="none"><rect x="34" y="30" width="62" height="46" rx="7" fill="#fff" stroke="#11212d" stroke-width="2.2" transform="rotate(-8 65 53)"/><rect x="46" y="40" width="62" height="46" rx="7" fill="#fff" stroke="#11212d" stroke-width="2.2"/><path d="M55 53h40M55 62h28M55 71h34" stroke="#11212d" stroke-width="2.2" stroke-linecap="round"/><circle cx="113" cy="40" r="8" fill="#d9b583"/></svg>';
+        $artSaved = '<svg width="150" height="118" viewBox="0 0 150 118" fill="none"><path d="M54 24h44v68l-22-15-22 15z" fill="#fff" stroke="#11212d" stroke-width="2.4" stroke-linejoin="round"/><path d="M76 40l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1z" fill="#d9b583" stroke="#11212d" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+        $artApplied = '<svg width="158" height="118" viewBox="0 0 158 118" fill="none"><path d="M28 58L126 26 98 100 76 76 28 58z" fill="#fff" stroke="#11212d" stroke-width="2.4" stroke-linejoin="round"/><path d="M76 76l50-50" stroke="#11212d" stroke-width="2.2" stroke-linecap="round"/><path d="M76 76l-2 22 14-12" stroke="#11212d" stroke-width="2.2" stroke-linejoin="round" fill="#d9b58355"/></svg>';
+
+        $renderCollection('incelediklerim', 'Göz Attıklarım',
+          'Akışta açıp incelediğin ilanlar burada birikir; arayıp filtreleyerek baktıklarına saniyeler içinde geri dönersin.',
+          'Göz attıklarımda ara', $viewedRows,
+          ['title' => 'Daha hiç ilana göz atmadın', 'text' => 'Akışta dolaştıkça açtığın ilanlar burada toplanmaya başlar. Hadi keşfe çık.', 'cta' => 'Akışı keşfet', 'cta_href' => '/akis.php', 'art' => $artViewed]);
+
+        $renderCollection('kaydettiklerim', 'Cebimdekiler',
+          'Şimdi başvurmaya vaktin yoksa ilanı cebine at; aramakla uğraşmadan istediğin an buradan devam edersin.',
+          'Cebimdekilerde ara', $savedRows,
+          ['title' => 'Cebinde ilan yok', 'text' => 'Bir ilanı beğendiğinde cebine at, kaybolmasın. Hepsi seni burada bekler.', 'cta' => 'Akışı keşfet', 'cta_href' => '/akis.php', 'art' => $artSaved]);
+
+        $renderCollection('basvurularim', 'Gönderdiklerim',
+          'Gönderdiğin başvuruların tamamını tek yerden izle; her birinin durumunu gör, fikrin değişirse geri çek.',
+          'Gönderdiklerimde ara', $appliedRows,
+          ['title' => 'Henüz bir başvurun yok', 'text' => 'Sana uygun pozisyonu bulup ilk başvurunu gönder; geçmişin buradan birikecek.', 'cta' => 'Akışı keşfet', 'cta_href' => '/akis.php', 'art' => $artApplied], true);
+        ?>
+
+        <!-- ░░ PANEL: İŞ ALARMLARIM ░░ -->
+        <section class="sk-panel" data-panel="alarmlarim" hidden>
+          <div class="sk-panel-head">
+            <h2 class="sk-panel-title">Radarım</h2>
+          </div>
+          <div class="sk-empty sk-empty--card">
+            <div class="sk-empty-art" aria-hidden="true">
+              <svg width="150" height="120" viewBox="0 0 150 120" fill="none"><path d="M56 80c0-7 5-10 5-22a14 14 0 0128 0c0 12 5 15 5 22z" fill="#fff" stroke="#11212d" stroke-width="2.4" stroke-linejoin="round"/><path d="M68 86a7 7 0 0014 0" stroke="#11212d" stroke-width="2.4" stroke-linecap="round"/><path d="M75 36v-7" stroke="#11212d" stroke-width="2.4" stroke-linecap="round"/><path d="M104 44c5 5 8 11 8 18M112 36c7 7 11 16 11 26" stroke="#d9b583" stroke-width="2.4" stroke-linecap="round"/></svg>
+            </div>
+            <h3 class="sk-empty-title">Tanımlı bir alarmın yok</h3>
+            <p class="sk-empty-text">İlgilendiğin kriterleri seç; aradığın koşullara uyan bir ilan yayınlandığında ilk senin haberin olsun.</p>
+            <a class="sk-btn sk-btn--ghost" href="/akis.php">Akıştan alarm oluştur</a>
+          </div>
+        </section>
+
+        <!-- ░░ PANEL: İŞ TERCİHLERİM ░░ -->
+        <section class="sk-panel" data-panel="tercihlerim" hidden>
+          <div class="sk-panel-head">
+            <h2 class="sk-panel-title">Pusulam</h2>
+          </div>
+          <div class="sk-empty sk-empty--card">
+            <div class="sk-empty-art" aria-hidden="true">
+              <svg width="150" height="120" viewBox="0 0 150 120" fill="none"><path d="M42 44h66M42 60h66M42 76h66" stroke="#11212d" stroke-width="2.4" stroke-linecap="round"/><circle cx="66" cy="44" r="8" fill="#d9b583" stroke="#11212d" stroke-width="2.2"/><circle cx="92" cy="60" r="8" fill="#fff" stroke="#11212d" stroke-width="2.2"/><circle cx="58" cy="76" r="8" fill="#d9b583" stroke="#11212d" stroke-width="2.2"/></svg>
+            </div>
+            <h3 class="sk-empty-title">Önerileri sana göre ayarlayalım</h3>
+            <p class="sk-empty-text">Aradığın işi birkaç başlıkta tarif et; akışını ve önerilerimizi tercihlerine göre şekillendirelim.</p>
+            <button type="button" class="sk-btn sk-btn--solid" data-goto-section="career">Tercihleri belirle</button>
+          </div>
+        </section>
+
+        <!-- ░░ PANEL: ŞİRKET SORULARIM ░░ -->
+        <section class="sk-panel" data-panel="sorularim" hidden>
+          <div class="sk-panel-head">
+            <h2 class="sk-panel-title">Hazır Yanıtlarım</h2>
+            <p class="sk-panel-desc">İşverenlerin sıkça sorduğu soruları önceden yanıtla. Verdiğin cevaplar yeni başvurularında otomatik gelir; her seferinde baştan yazmana gerek kalmaz.</p>
+          </div>
+          <?php foreach ($companyQuestions as $groupName => $qs): ?>
+            <div class="sk-qgroup">
+              <p class="sk-qgroup-title"><?= $h($groupName) ?></p>
+              <div class="sk-qlist">
+                <?php foreach ($qs as $qk => $qtext): $ans = $qAnswers[$qk] ?? ''; ?>
+                  <div class="sk-q<?= $ans !== '' ? ' is-answered' : '' ?>" data-q>
+                    <div class="sk-q-view">
+                      <div class="sk-q-main">
+                        <p class="sk-q-text"><?= $h($qtext) ?></p>
+                        <?php if ($ans !== ''): ?>
+                          <p class="sk-q-answer"><?= nl2br($h($ans)) ?></p>
+                        <?php else: ?>
+                          <p class="sk-q-answer sk-q-answer--empty">Henüz bir cevap eklemedin.</p>
+                        <?php endif; ?>
+                      </div>
+                      <button type="button" class="sk-q-edit" data-q-edit><?= $ans !== '' ? $pencil . ' Düzenle' : '+ Cevapla' ?></button>
+                    </div>
+                    <form class="sk-q-form" method="post" action="/seeker-panel.php#sorularim" hidden>
+                      <input type="hidden" name="mode" value="company_answer">
+                      <input type="hidden" name="question_key" value="<?= $h($qk) ?>">
+                      <textarea name="answer" rows="2" maxlength="2000" placeholder="Cevabını yaz…"><?= $h($ans) ?></textarea>
+                      <div class="sk-q-foot">
+                        <button type="submit" class="sk-btn sk-btn--solid">Kaydet</button>
+                        <button type="button" class="sk-btn sk-btn--ghost" data-q-cancel>Vazgeç</button>
+                      </div>
+                    </form>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </section>
+
+        </div><!-- /.sk-panels -->
+      </div><!-- /.sk-dash -->
     </div>
   </div>
 
   <?php include __DIR__ . '/_logout-modal.php'; ?>
   <script src="/frontend/assets/js/employer/topbar.js?v=<?= filemtime(__DIR__ . '/../../assets/js/employer/topbar.js') ?>" defer></script>
+  <script src="/frontend/assets/js/seeker/dashboard.js?v=<?= filemtime(__DIR__ . '/../../assets/js/seeker/dashboard.js') ?>" defer></script>
   <script src="/frontend/assets/js/shared/logout-modal.js?v=<?= filemtime(__DIR__ . '/../../assets/js/shared/logout-modal.js') ?>" defer></script>
   <script src="/frontend/assets/js/seeker/profile.js?v=<?= filemtime(__DIR__ . '/../../assets/js/seeker/profile.js') ?>" defer></script>
+  <script src="/frontend/assets/js/seeker/portfolio.js?v=<?= filemtime(__DIR__ . '/../../assets/js/seeker/portfolio.js') ?>" defer></script>
+  <?php include __DIR__ . '/../../partials/tour-config.php'; ?>
 </body>
 <?php endif; ?>
 </html>

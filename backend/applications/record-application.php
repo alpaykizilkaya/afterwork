@@ -86,7 +86,7 @@ if (!function_exists('record_application')) {
                     $employerAccountId,
                     'Yeni başvuru',
                     $title !== '' ? $title . ' ilanına yeni bir başvuru geldi.' : 'İlanlarından birine yeni bir başvuru geldi.',
-                    '/mercek.php?id=' . $listingId
+                    '/basvuru.php?l=' . $listingId . '&s=' . $seekerAccountId
                 );
             }
         } catch (Throwable) {
